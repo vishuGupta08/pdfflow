@@ -1,28 +1,4 @@
-export interface UploadedFile {
-  fileId: string;
-  originalName: string;
-  size: number;
-  uploadDate: string;
-}
-
-export interface TransformationRule {
-  type: string;
-  pages?: number[];
-  angle?: number;
-  text?: string;
-  position?: string;
-  opacity?: number;
-  redactWords?: string[];
-  fontSize?: number;
-  pageRange?: { start: number; end: number };
-  pageOrder?: number[];
-}
-
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+import { UploadedFile, TransformationRule, ApiResponse } from '../types/index';
 
 export interface TransformResult {
   success: boolean;

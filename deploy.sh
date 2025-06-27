@@ -1,18 +1,14 @@
 #!/bin/bash
 
-# PDFFlow Railway Deployment Script
-echo "🚀 Starting PDFFlow deployment..."
+# PDFFlow Railway Deployment Script (Server Only)
+echo "🚀 Starting PDFFlow backend deployment..."
 
-# Install root dependencies
-echo "📦 Installing root dependencies..."
-npm install --legacy-peer-deps
-
-# Install server dependencies
+# Install server dependencies only
 echo "📦 Installing server dependencies..."
 cd server
 npm install --legacy-peer-deps
 
-# Build the server
+# Build the server only
 echo "🔨 Building server..."
 npm run build
 
