@@ -1,6 +1,97 @@
 # PDFFlow Deployment Guide
 
-This guide will help you deploy PDFFlow for free using Vercel (frontend) and Railway (backend).
+Since you're experiencing `npm ci` issues with Railway, here are **multiple deployment options**:
+
+## Option 1: Railway (Updated Configuration)
+
+I've created fixes for the Railway deployment issues:
+
+### What I Fixed:
+- ✅ Created `deploy.sh` script to bypass `npm ci` issues
+- ✅ Updated `railway.toml` and `nixpacks.toml` configurations
+- ✅ Added proper package-lock.json files
+- ✅ Fixed workspace structure handling
+
+### Deploy Steps:
+1. **Push changes to GitHub:**
+   ```bash
+   git push origin main
+   ```
+
+2. **In Railway Dashboard:**
+   - Go to your project
+   - Click "Redeploy"
+   - Monitor the build logs
+
+3. **If it still fails,** try Option 2 below.
+
+## Option 2: Render.com (Recommended Alternative)
+
+Render.com is more reliable for Node.js deployments and handles complex projects better.
+
+### Deploy on Render:
+1. **Go to** [render.com](https://render.com)
+2. **Connect GitHub** and select your repository
+3. **Create a Web Service** with these settings:
+   - **Name:** `pdfflow-backend`
+   - **Environment:** `Node`
+   - **Build Command:** `cd server && npm install && npm run build`
+   - **Start Command:** `cd server && npm start`
+   - **Plan:** Free
+
+4. **Add Environment Variables:**
+   - `NODE_ENV`: `production`
+   - `FRONTEND_URL`: (add after frontend deployment)
+
+## Option 3: Heroku (Classic Option)
+
+### Deploy on Heroku:
+1. **Create a Procfile:**
+   ```
+   web: cd server && npm start
+   ```
+
+2. **Deploy:**
+   ```bash
+   # Install Heroku CLI first
+   heroku create pdfflow-backend
+   heroku config:set NODE_ENV=production
+   git push heroku main
+   ```
+
+## Frontend Deployment (Vercel)
+
+Regardless of which backend option you choose:
+
+1. **Go to** [vercel.com](https://vercel.com)
+2. **Import your GitHub repository**
+3. **Settings:**
+   - Framework: `Vite`
+   - Root Directory: `client`
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+
+4. **Environment Variables:**
+   - `VITE_API_BASE_URL`: `https://your-backend-url.com/api`
+
+## Troubleshooting
+
+### If Railway keeps failing:
+- The `npm ci` error usually indicates workspace/dependency conflicts
+- Our fixes should resolve this, but Render.com is more reliable
+
+### If Render.com deployment fails:
+- Check build logs for specific errors
+- Ensure all dependencies are in package.json
+- Verify Node.js version compatibility
+
+## Recommendation
+
+**For best results, use Render.com for the backend** - it's more reliable than Railway for complex Node.js projects and has better free tier support.
+
+---
+
+**Which option would you like to try?**
 
 ## Prerequisites
 
