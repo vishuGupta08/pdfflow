@@ -1,15 +1,19 @@
 [variables]
 NODE_ENV = "production"
 
+[phases.install]
+cmds = [
+  "npm install",
+  "cd server && npm install"
+]
+
 [phases.build]
 cmds = [
-  "cd server",
-  "npm install",
-  "npm run build"
+  "npm run build:server"
 ]
 
 [phases.start]
-cmd = "cd server && npm start"
+cmd = "npm run start"
 
 [providers]
-node = "18" 
+node = "20" 
