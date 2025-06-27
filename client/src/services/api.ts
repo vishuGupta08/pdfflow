@@ -15,6 +15,11 @@ export const transformPDF = async (
   fileId: string,
   transformations: TransformationRule[]
 ): Promise<TransformResult> => {
+  // Remove the 'id' field from transformation rules before sending to API
+  // The 'id' field is only used for UI purposes and backend doesn't allow it
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const transformationsWithoutId = transformations.map(({ id: _id, ...rule }) => rule);
+  
   const response = await fetch(`${API_BASE_URL}/transform`, {
     method: 'POST',
     headers: {
@@ -22,7 +27,7 @@ export const transformPDF = async (
     },
     body: JSON.stringify({
       fileId,
-      transformations,
+      transformations: transformationsWithoutId,
     }),
   });
 
