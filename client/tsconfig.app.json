@@ -18,10 +18,7 @@
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true,
-    
-    /* Fix React types compatibility */
-    "types": ["node"]
+    "noFallthroughCasesInSwitch": true
   },
   "include": ["src"]
 }
