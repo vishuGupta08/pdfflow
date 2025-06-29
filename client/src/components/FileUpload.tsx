@@ -36,10 +36,35 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       if (response.success && response.data) {
         onFileUpload(response.data);
       } else {
-        setUploadError(response.error || 'Upload failed');
+        // Handle specific error types
+        let errorMessage = response.error || 'Upload failed';
+        
+        if (response.errorType === 'FILE_SIZE_LIMIT') {
+          errorMessage = `File size exceeds the limit. Please upload a PDF smaller than 50MB. Your file is ${formatFileSize(file.size)}.`;
+        } else if (response.errorType === 'AUTH_REQUIRED') {
+          errorMessage = 'Please sign in to upload files.';
+        } else if (response.errorType === 'USAGE_LIMIT') {
+          if (response.limitInfo?.upgrade_required) {
+            errorMessage = `Monthly upload limit exceeded for ${response.limitInfo.current_plan} plan. Please upgrade to continue.`;
+          } else {
+            errorMessage = 'Upload limit reached. Please try again later or upgrade your plan.';
+          }
+        }
+        
+        setUploadError(errorMessage);
       }
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Upload failed');
+      let errorMessage = 'Upload failed';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('413') || error.message.includes('too large')) {
+          errorMessage = `File size exceeds the limit. Please upload a PDF smaller than 50MB. Your file is ${formatFileSize(file.size)}.`;
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setUploadError(errorMessage);
     } finally {
       setIsUploading(false);
     }
@@ -189,11 +214,31 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       {/* Error Message */}
       {uploadError && (
         <div className="card status-error animate-slide-up">
-          <div className="flex items-center space-x-3">
-            <AlertCircle className="h-5 w-5 text-error-600 flex-shrink-0" />
-            <div>
-              <h4 className="font-medium text-error-800">Upload Failed</h4>
-              <p className="text-sm text-error-600 mt-1">{uploadError}</p>
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="h-5 w-5 text-error-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-medium text-error-800 mb-1">Upload Failed</h4>
+              <p className="text-sm text-error-600">{uploadError}</p>
+              
+              {/* Show helpful tips based on error type */}
+              {uploadError.includes('50MB') && (
+                <div className="mt-2 text-xs text-error-500">
+                  <p className="font-medium mb-1">Tips to reduce file size:</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    <li>Use PDF compression tools</li>
+                    <li>Remove unnecessary images or pages</li>
+                    <li>Consider upgrading for larger file support</li>
+                  </ul>
+                </div>
+              )}
+              
+              {uploadError.includes('limit') && uploadError.includes('plan') && (
+                <div className="mt-2 p-2 bg-primary-50 border border-primary-200 rounded text-xs">
+                  <p className="text-primary-700">
+                    <strong>Upgrade to Pro:</strong> Get unlimited uploads, larger file sizes, and premium features.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
