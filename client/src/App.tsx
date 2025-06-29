@@ -3,7 +3,7 @@ import { FileUpload } from './components/FileUpload'
 import { TransformationRuleForm } from './components/TransformationRuleForm'
 import { PreviewPanel } from './components/PreviewPanel'
 import { PDFPreview } from './components/PDFPreview'
-import { transformPDF } from './services/api'
+import { transformPDF, ApiService } from './services/api'
 import type { TransformationRule, UploadedFile } from './types'
 import './App.css'
 
@@ -67,7 +67,7 @@ function App() {
 
   const handleDownload = () => {
     if (transformResult?.downloadId) {
-      const downloadUrl = `http://localhost:3001/api/download/${transformResult.downloadId}`
+      const downloadUrl = ApiService.getDownloadUrl(transformResult.downloadId)
       const link = document.createElement('a')
       link.href = downloadUrl
       link.download = transformResult.fileName || 'transformed.pdf'

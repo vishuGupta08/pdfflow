@@ -34,12 +34,17 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       'https://pdfflow-*.vercel.app',
       // Add your actual Vercel URL here temporarily
     ].filter(Boolean) as string[]
-  : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'];
+  : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'];
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
+    
+    // In development, allow any localhost port
+    if (process.env.NODE_ENV !== 'production' && origin.startsWith('http://localhost:')) {
+      return callback(null, true);
+    }
     
     // Check if origin is allowed
     const isAllowed = allowedOrigins.some(allowedOrigin => {
