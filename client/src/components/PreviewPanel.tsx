@@ -1,12 +1,39 @@
 import { Eye, FileText, RotateCw, Shield, Scissors, Hash, ArrowUpDown, Archive, CheckCircle } from 'lucide-react';
-import type { TransformationRule } from '../types';
+import type { TransformationRule, UploadedFile } from '../types';
 
 interface PreviewPanelProps {
   rules: TransformationRule[];
   fileName?: string;
+  uploadedFile?: UploadedFile | null;
 }
 
-export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName }) => {
+export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, uploadedFile }) => {
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getCompressionEstimate = (originalSize: number, level: string): { size: number; reduction: number } => {
+    const reductionRates = {
+      low: 0.10,      // 10% reduction (minimal compression, best quality)
+      medium: 0.45,   // 45% reduction (balanced)
+      high: 0.70,     // 70% reduction (significant compression)
+      maximum: 0.85,  // 85% reduction (maximum compression)
+      custom: 0.50    // Default 50% for custom
+    };
+    
+    const reduction = reductionRates[level as keyof typeof reductionRates] || 0.40;
+    const estimatedSize = originalSize * (1 - reduction);
+    
+    return {
+      size: estimatedSize,
+      reduction: reduction * 100
+    };
+  };
+
   const getIcon = (type: TransformationRule['type']) => {
     const iconProps = { className: "h-4 w-4" };
     
@@ -48,8 +75,27 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName }) =
         return `Extract pages ${rule.pageRange?.start || 1} to ${rule.pageRange?.end || 1}`;
       case 'rearrange_pages':
         return `Rearrange to order: ${rule.pageOrder?.join(', ') || 'No order specified'}`;
-      case 'compress':
-        return 'Compress PDF to reduce file size';
+      case 'compress': {
+        const level = rule.compressionLevel || 'medium';
+        const quality = rule.imageQuality || 85;
+        let description = `${level.charAt(0).toUpperCase() + level.slice(1)} compression (${quality}% image quality)`;
+        
+        if (uploadedFile) {
+          const originalSize = uploadedFile.size;
+          if (level === 'custom' && rule.targetFileSize) {
+            const targetBytes = rule.targetFileSize * 1024;
+            const reduction = ((originalSize - targetBytes) / originalSize) * 100;
+            description += `\nOriginal: ${formatFileSize(originalSize)} → Target: ${formatFileSize(targetBytes)} (${reduction.toFixed(1)}% reduction)`;
+          } else {
+            const estimate = getCompressionEstimate(originalSize, level);
+            description += `\nOriginal: ${formatFileSize(originalSize)} → Estimated: ${formatFileSize(estimate.size)} (~${estimate.reduction.toFixed(0)}% reduction)`;
+          }
+        } else if (level === 'custom' && rule.targetFileSize) {
+          description += ` - Target: ${rule.targetFileSize} KB`;
+        }
+        
+        return description;
+      }
       default:
         return 'Unknown transformation';
     }

@@ -36,7 +36,11 @@ const transformSchema = Joi.object({
       }).optional(),
       redactWords: Joi.array().items(Joi.string()).optional(),
       fontSize: Joi.number().min(8).max(72).optional(),
-      fontColor: Joi.string().optional()
+      fontColor: Joi.string().optional(),
+      // Compression options
+      compressionLevel: Joi.string().valid('low', 'medium', 'high', 'maximum', 'custom').optional(),
+      targetFileSize: Joi.number().integer().min(10).max(50000).optional(), // KB
+      imageQuality: Joi.number().integer().min(10).max(100).optional() // Percentage
     })
   ).min(1).required()
 });

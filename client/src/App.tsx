@@ -10,7 +10,7 @@ import type { TransformationRule, UploadedFile } from './types'
 import { LogIn, LogOut, User } from 'lucide-react'
 import './App.css'
 
-type Step = 'upload' | 'configure' | 'preview' | 'download'
+type Step = 'upload' | 'configure' | 'preview' | 'download' | 'complete'
 
 function App() {
   const { user, signOut, loading } = useAuth()
@@ -100,6 +100,7 @@ function App() {
 
   const handlePreview = () => {
     console.log('🔍 Preview button clicked - Preview ID:', transformResult?.previewId);
+    setCurrentStep('preview');
     setShowPreview(true)
   }
 
@@ -112,6 +113,7 @@ function App() {
     
     if (transformResult?.downloadId) {
       console.log('✅ Starting download...');
+      setCurrentStep('download');
       const downloadUrl = ApiService.getDownloadUrl(transformResult.downloadId)
       const link = document.createElement('a')
       link.href = downloadUrl
@@ -119,6 +121,11 @@ function App() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+      
+      // Mark download as completed after a brief delay
+      setTimeout(() => {
+        setCurrentStep('complete');
+      }, 500);
     } else {
       console.log('❌ No download ID found');
     }
@@ -136,6 +143,11 @@ function App() {
     const stepOrder: Step[] = ['upload', 'configure', 'preview', 'download']
     const currentIndex = stepOrder.indexOf(currentStep)
     const stepIndex = stepOrder.indexOf(step)
+    
+    // If currentStep is 'complete', all visible steps should be completed
+    if (currentStep === 'complete') {
+      return 'completed'
+    }
     
     if (stepIndex < currentIndex) return 'completed'
     if (stepIndex === currentIndex) return 'current'
@@ -262,6 +274,7 @@ function App() {
                   <TransformationRuleForm
                     rules={transformationRules}
                     onRulesChange={setTransformationRules}
+                    uploadedFile={uploadedFile}
                   />
                 </div>
               )}

@@ -105,10 +105,6 @@ export const transformPDF = async (
 
     const data = await handleApiResponse<{downloadId: string; previewId: string; fileName: string}>(response);
     
-    console.log('🔧 Transform API response data:', data);
-    console.log('🔧 Response ok:', response.ok);
-    console.log('🔧 Response status:', response.status);
-    
     if (!response.ok) {
       return {
         success: false,

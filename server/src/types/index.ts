@@ -11,6 +11,10 @@ export interface TransformationRule {
   redactWords?: string[];
   fontSize?: number;
   fontColor?: string;
+  // Compression options
+  compressionLevel?: 'low' | 'medium' | 'high' | 'maximum' | 'custom';
+  targetFileSize?: number; // Target file size in KB for custom compression
+  imageQuality?: number; // Image quality percentage (10-100)
 }
 
 export interface TransformRequest {

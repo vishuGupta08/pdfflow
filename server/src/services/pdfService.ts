@@ -1,20 +1,42 @@
 import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib';
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { TransformationRule } from '../types';
+
+const execAsync = promisify(exec);
 
 export class PDFService {
   static async transformPDF(filePath: string, transformations: TransformationRule[]): Promise<Buffer> {
     const pdfBytes = fs.readFileSync(filePath);
     const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
     
-    // Apply transformations in sequence
+    // Check if compression is requested
+    const compressionRule = transformations.find(t => t.type === 'compress');
+    
+    // Apply non-compression transformations first
     for (const transformation of transformations) {
-      await this.applyTransformation(pdfDoc, transformation);
+      if (transformation.type !== 'compress') {
+        await this.applyTransformation(pdfDoc, transformation);
+      }
     }
     
-    // Return the transformed PDF as buffer
-    return Buffer.from(await pdfDoc.save());
+    // Save the PDF with standard options
+    const transformedPdfBuffer = Buffer.from(await pdfDoc.save());
+    
+    // If compression is requested, apply it using Ghostscript
+    if (compressionRule) {
+      console.log(`🗜️ Applying ${compressionRule.compressionLevel || 'medium'} compression with Ghostscript`);
+      return await this.compressWithGhostscript(
+        transformedPdfBuffer, 
+        compressionRule.compressionLevel || 'medium',
+        compressionRule.targetFileSize,
+        compressionRule.imageQuality || 85
+      );
+    }
+    
+    return transformedPdfBuffer;
   }
   
   private static async applyTransformation(pdfDoc: PDFDocument, rule: TransformationRule): Promise<void> {
@@ -27,9 +49,6 @@ export class PDFService {
         break;
       case 'add_watermark':
         await this.addWatermark(pdfDoc, rule.text || 'WATERMARK', rule.position || 'center', rule.opacity || 0.3);
-        break;
-      case 'compress':
-        // PDF compression is handled automatically by pdf-lib
         break;
       case 'redact_text':
         await this.redactText(pdfDoc, rule.redactWords || []);
@@ -239,25 +258,168 @@ export class PDFService {
   }
   
   private static async extractPages(pdfDoc: PDFDocument, pageRange: { start: number; end: number }): Promise<void> {
-    const { start, end } = pageRange;
     const pageCount = pdfDoc.getPageCount();
+    const startIndex = Math.max(0, pageRange.start - 1);
+    const endIndex = Math.min(pageCount - 1, pageRange.end - 1);
     
-    // Create new document with extracted pages
-    const newDoc = await PDFDocument.create();
+    // Create new document with only the specified pages
+    const newPdfDoc = await PDFDocument.create();
     
-    for (let i = start - 1; i < Math.min(end, pageCount); i++) {
-      if (i >= 0) {
-        const [copiedPage] = await newDoc.copyPages(pdfDoc, [i]);
-        newDoc.addPage(copiedPage);
-      }
+    // Copy the specified range of pages
+    const pageIndices = [];
+    for (let i = startIndex; i <= endIndex; i++) {
+      pageIndices.push(i);
     }
     
-    // Replace original pages with extracted ones
+    const copiedPages = await newPdfDoc.copyPages(pdfDoc, pageIndices);
+    copiedPages.forEach(page => newPdfDoc.addPage(page));
+    
+    // Replace pages in original document
     while (pdfDoc.getPageCount() > 0) {
       pdfDoc.removePage(0);
     }
     
-    const extractedPages = await pdfDoc.copyPages(newDoc, newDoc.getPageIndices());
-    extractedPages.forEach((page) => pdfDoc.addPage(page));
+    // Copy back all pages from new document
+    const finalPages = await pdfDoc.copyPages(newPdfDoc, newPdfDoc.getPageIndices());
+    finalPages.forEach(page => pdfDoc.addPage(page));
+  }
+
+  private static async compressWithGhostscript(
+    pdfBuffer: Buffer,
+    compressionLevel: 'low' | 'medium' | 'high' | 'maximum' | 'custom',
+    targetFileSize?: number,
+    imageQuality: number = 85
+  ): Promise<Buffer> {
+    const tempDir = path.join(__dirname, '../../temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const inputFile = path.join(tempDir, `input_${Date.now()}.pdf`);
+    const outputFile = path.join(tempDir, `output_${Date.now()}.pdf`);
+
+    try {
+      // Write input buffer to temporary file
+      fs.writeFileSync(inputFile, pdfBuffer);
+
+      // Get original file size for logging
+      const originalSize = pdfBuffer.length;
+      console.log(`📊 Original PDF size: ${(originalSize / 1024).toFixed(2)} KB`);
+
+      // Define compression settings based on level
+      let gsSettings = '';
+      let dpi = '150'; // Default DPI
+
+      switch (compressionLevel) {
+        case 'low':
+          gsSettings = '/printer'; // Good quality, less compression
+          dpi = '300';
+          break;
+        case 'medium':
+          gsSettings = '/ebook'; // Medium quality, medium compression
+          dpi = '150';
+          break;
+        case 'high':
+          gsSettings = '/screen'; // Lower quality, more compression
+          dpi = '100';
+          break;
+        case 'maximum':
+          gsSettings = '/screen'; // Lowest quality, maximum compression
+          dpi = '72';
+          break;
+        case 'custom':
+          gsSettings = '/ebook'; // Default to medium for custom
+          dpi = targetFileSize && targetFileSize < 500 ? '72' : '150';
+          break;
+      }
+
+      // Build Ghostscript command
+      const gsCommand = [
+        'gs',
+        '-sDEVICE=pdfwrite',
+        '-dCompatibilityLevel=1.4',
+        '-dPDFSETTINGS=' + gsSettings,
+        '-dNOPAUSE',
+        '-dQUIET',
+        '-dBATCH',
+        `-dDownsampleColorImages=true`,
+        `-dColorImageResolution=${dpi}`,
+        `-dDownsampleGrayImages=true`,
+        `-dGrayImageResolution=${dpi}`,
+        `-dDownsampleMonoImages=true`,
+        `-dMonoImageResolution=${parseInt(dpi) * 2}`, // Higher resolution for mono images
+        `-dColorImageDownsampleThreshold=1.0`,
+        `-dGrayImageDownsampleThreshold=1.0`,
+        `-dMonoImageDownsampleThreshold=1.0`,
+        `-dCompressPages=true`,
+        `-dUseFlateCompression=true`,
+        `-dOptimize=true`,
+        `-sOutputFile=${outputFile}`,
+        inputFile
+      ].join(' ');
+
+      console.log(`🔧 Running Ghostscript compression: ${compressionLevel} (DPI: ${dpi})`);
+      
+      // Execute Ghostscript command
+      const { stdout, stderr } = await execAsync(gsCommand);
+      
+      if (stderr && !stderr.includes('GPL Ghostscript')) {
+        console.warn(`⚠️ Ghostscript warning: ${stderr}`);
+      }
+
+      // Check if output file was created
+      if (!fs.existsSync(outputFile)) {
+        throw new Error('Ghostscript compression failed - output file not created');
+      }
+
+      // Read compressed file
+      const compressedBuffer = fs.readFileSync(outputFile);
+      const compressedSize = compressedBuffer.length;
+      const reduction = ((originalSize - compressedSize) / originalSize) * 100;
+
+      console.log(`📊 Compressed PDF size: ${(compressedSize / 1024).toFixed(2)} KB`);
+      console.log(`📉 Size reduction: ${reduction.toFixed(1)}%`);
+
+      // If custom target size is specified and we didn't meet it, try again with higher compression
+      if (compressionLevel === 'custom' && targetFileSize) {
+        const targetBytes = targetFileSize * 1024;
+        if (compressedSize > targetBytes && reduction < 70) {
+          console.log(`🎯 Target not met, applying maximum compression...`);
+          // Cleanup current output
+          fs.unlinkSync(outputFile);
+          
+          // Try again with maximum compression
+          const maxCompressionCommand = gsCommand
+            .replace('-dPDFSETTINGS=/ebook', '-dPDFSETTINGS=/screen')
+            .replace(`-dColorImageResolution=${dpi}`, '-dColorImageResolution=72')
+            .replace(`-dGrayImageResolution=${dpi}`, '-dGrayImageResolution=72');
+          
+          await execAsync(maxCompressionCommand);
+          
+          if (fs.existsSync(outputFile)) {
+            const finalBuffer = fs.readFileSync(outputFile);
+            const finalSize = finalBuffer.length;
+            const finalReduction = ((originalSize - finalSize) / originalSize) * 100;
+            console.log(`📊 Final compressed size: ${(finalSize / 1024).toFixed(2)} KB (${finalReduction.toFixed(1)}% reduction)`);
+            return finalBuffer;
+          }
+        }
+      }
+
+      return compressedBuffer;
+
+    } catch (error) {
+      console.error('🚫 Ghostscript compression failed:', error);
+      // Return original buffer if compression fails
+      return pdfBuffer;
+    } finally {
+      // Cleanup temporary files
+      try {
+        if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile);
+        if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+      } catch (cleanupError) {
+        console.warn('⚠️ Failed to cleanup temporary files:', cleanupError);
+      }
+    }
   }
 } 

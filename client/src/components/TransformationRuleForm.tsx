@@ -1,9 +1,10 @@
 import { Plus, Trash2, Settings, RotateCw, Shield, Eye, Hash, Scissors, ArrowUpDown, Archive } from 'lucide-react';
-import type { TransformationRule } from '../types';
+import type { TransformationRule, UploadedFile } from '../types';
 
 interface TransformationRuleFormProps {
   rules: TransformationRule[];
   onRulesChange: (rules: TransformationRule[]) => void;
+  uploadedFile?: UploadedFile | null;
 }
 
 const transformationTypes = [
@@ -19,7 +20,8 @@ const transformationTypes = [
 
 export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
   rules,
-  onRulesChange
+  onRulesChange,
+  uploadedFile
 }) => {
   const addRule = () => {
     const newRule: TransformationRule = {
@@ -41,6 +43,32 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
 
   const getTypeConfig = (type: TransformationRule['type']) => {
     return transformationTypes.find(t => t.value === type) || transformationTypes[0];
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getCompressionEstimate = (originalSize: number, level: string): { size: number; reduction: number } => {
+    const reductionRates = {
+      low: 0.10,      // 10% reduction (minimal compression, best quality)
+      medium: 0.45,   // 45% reduction (balanced)
+      high: 0.70,     // 70% reduction (significant compression)
+      maximum: 0.85,  // 85% reduction (maximum compression)
+      custom: 0.50    // Default 50% for custom
+    };
+    
+    const reduction = reductionRates[level as keyof typeof reductionRates] || 0.40;
+    const estimatedSize = originalSize * (1 - reduction);
+    
+    return {
+      size: estimatedSize,
+      reduction: reduction * 100
+    };
   };
 
   const renderRuleFields = (rule: TransformationRule) => {
@@ -286,16 +314,178 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
           </div>
         );
 
-      case 'compress':
+      case 'compress': {
+        const originalFileSize = uploadedFile?.size || 0;
+        const compressionLevel = rule.compressionLevel || 'medium';
+        const estimate = getCompressionEstimate(originalFileSize, compressionLevel);
+        
         return (
-          <div className="text-center p-6 bg-gradient-to-r from-primary-50 to-primary-25 rounded-xl">
-            <Archive className="h-12 w-12 text-primary-600 mx-auto mb-3" />
-            <h4 className="font-medium text-gray-900 mb-2">PDF Compression</h4>
-            <p className="text-sm text-gray-600">
-              This will automatically optimize your PDF file size without additional settings.
-            </p>
+          <div className="space-y-6">
+            {/* Original File Size Info */}
+            {uploadedFile && (
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Original File Size</p>
+                    <p className="text-lg font-semibold text-gray-900">{formatFileSize(originalFileSize)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-gray-700">Estimated After Compression</p>
+                    <p className="text-lg font-semibold text-primary-600">{formatFileSize(estimate.size)}</p>
+                    <p className="text-xs text-success-600">~{estimate.reduction.toFixed(0)}% reduction</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Compression Level
+                </label>
+                <select
+                  className="select-field"
+                  value={rule.compressionLevel || 'medium'}
+                  onChange={(e) => updateRule(rule.id, { 
+                    compressionLevel: e.target.value as TransformationRule['compressionLevel'] 
+                  })}
+                >
+                  <option value="low">Low Compression (Best Quality)</option>
+                  <option value="medium">Medium Compression (Balanced)</option>
+                  <option value="high">High Compression (Smaller Size)</option>
+                  <option value="maximum">Maximum Compression (Smallest Size)</option>
+                  <option value="custom">Custom Target Size</option>
+                </select>
+                
+                {/* Show size estimates for each level */}
+                {uploadedFile && (
+                  <div className="mt-2 space-y-1 text-xs text-gray-600">
+                    {['low', 'medium', 'high', 'maximum'].map((level) => {
+                      const levelEstimate = getCompressionEstimate(originalFileSize, level);
+                      const isSelected = compressionLevel === level;
+                      return (
+                        <div key={level} className={`flex justify-between ${isSelected ? 'font-medium text-primary-600' : ''}`}>
+                          <span>{level.charAt(0).toUpperCase() + level.slice(1)}:</span>
+                          <span>{formatFileSize(levelEstimate.size)} (~{levelEstimate.reduction.toFixed(0)}% smaller)</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Image Quality: {rule.imageQuality || 85}%
+                </label>
+                <input
+                  type="range"
+                  min="10"
+                  max="100"
+                  step="5"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  value={rule.imageQuality || 85}
+                  onChange={(e) => updateRule(rule.id, { imageQuality: parseInt(e.target.value) })}
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>Smaller size</span>
+                  <span>Better quality</span>
+                </div>
+                
+                {/* Image quality impact indicator */}
+                {uploadedFile && (
+                  <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs">
+                    <p className="text-amber-800">
+                      <strong>Quality Impact:</strong> Lower values significantly reduce file size but may affect image clarity.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {rule.compressionLevel === 'custom' && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-800 mb-2">
+                      Target File Size (KB)
+                    </label>
+                    <input
+                      type="number"
+                      min="10"
+                      max="50000"
+                      placeholder="e.g., 500"
+                      className="input-field border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+                      value={rule.targetFileSize || ''}
+                      onChange={(e) => updateRule(rule.id, { 
+                        targetFileSize: e.target.value ? parseInt(e.target.value) : undefined 
+                      })}
+                    />
+                    <p className="text-xs text-blue-600 mt-1">
+                      Enter desired file size in kilobytes
+                    </p>
+                    
+                    {/* Show target size vs original comparison */}
+                    {uploadedFile && rule.targetFileSize && (
+                      <div className="mt-2 text-xs">
+                        <div className="flex justify-between text-blue-700">
+                          <span>Original:</span>
+                          <span>{formatFileSize(originalFileSize)}</span>
+                        </div>
+                        <div className="flex justify-between text-blue-700">
+                          <span>Target:</span>
+                          <span>{formatFileSize(rule.targetFileSize * 1024)}</span>
+                        </div>
+                        <div className="flex justify-between font-medium text-blue-800 mt-1 pt-1 border-t border-blue-200">
+                          <span>Reduction:</span>
+                          <span>{(((originalFileSize - (rule.targetFileSize * 1024)) / originalFileSize) * 100).toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center">
+                    <div className="p-3 bg-blue-100 rounded-lg w-full">
+                      <div className="flex items-center space-x-2 text-blue-800">
+                        <Archive className="h-5 w-5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">Custom Compression</p>
+                          <p className="text-xs">Target: {rule.targetFileSize || 'Not set'} KB</p>
+                          {rule.targetFileSize && uploadedFile && (
+                            <p className="text-xs text-blue-600 mt-1">
+                              {rule.targetFileSize * 1024 < originalFileSize ? '✓ Size reduction' : '⚠️ Size increase'}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <div className="p-2 bg-primary-100 rounded-lg">
+                  <Archive className="h-5 w-5 text-primary-600" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium text-gray-900 mb-1">Compression Info</h4>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    {rule.compressionLevel === 'low' && <p>• Reduces file size by 5-15% with minimal quality loss (300 DPI)</p>}
+                    {rule.compressionLevel === 'medium' && <p>• Reduces file size by 35-55% with good quality balance (150 DPI)</p>}
+                    {rule.compressionLevel === 'high' && <p>• Reduces file size by 60-80% with noticeable quality reduction (100 DPI)</p>}
+                    {rule.compressionLevel === 'maximum' && <p>• Reduces file size by 75-95% with significant quality reduction (72 DPI)</p>}
+                    {rule.compressionLevel === 'custom' && <p>• Attempts to reach your target file size with optimal quality</p>}
+                    <p>• Images are downsampled and optimized using Ghostscript</p>
+                    <p>• Text and vector graphics remain sharp at all compression levels</p>
+                    <p>• Uses professional PDF optimization techniques</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         );
+      }
 
       default:
         return null;
