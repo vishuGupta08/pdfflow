@@ -9,21 +9,39 @@ const execAsync = promisify(exec);
 
 export class PDFService {
   static async transformPDF(filePath: string, transformations: TransformationRule[]): Promise<Buffer> {
-    const pdfBytes = fs.readFileSync(filePath);
+    let workingFilePath = filePath;
+    
+    // Check if password removal is requested - handle it first before pdf-lib processing
+    const passwordRemovalRule = transformations.find(t => t.type === 'remove_password');
+    if (passwordRemovalRule) {
+      console.log('🔒 Password removal detected - processing before other transformations');
+      workingFilePath = await this.handlePasswordRemoval(filePath, passwordRemovalRule);
+    }
+    
+    const pdfBytes = fs.readFileSync(workingFilePath);
     const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
     
     // Check if compression is requested
     const compressionRule = transformations.find(t => t.type === 'compress');
     
-    // Apply non-compression transformations first
+    // Apply non-compression and non-password-removal transformations
     for (const transformation of transformations) {
-      if (transformation.type !== 'compress') {
+      if (transformation.type !== 'compress' && transformation.type !== 'remove_password') {
         await this.applyTransformation(pdfDoc, transformation);
       }
     }
     
     // Save the PDF with standard options
     const transformedPdfBuffer = Buffer.from(await pdfDoc.save());
+    
+    // Cleanup temporary decrypted file if we created one
+    if (workingFilePath !== filePath) {
+      try {
+        fs.unlinkSync(workingFilePath);
+      } catch (cleanupError) {
+        console.warn('⚠️ Failed to cleanup temporary decrypted file:', cleanupError);
+      }
+    }
     
     // If compression is requested, apply it using Ghostscript
     if (compressionRule) {
@@ -914,22 +932,82 @@ export class PDFService {
     // Placeholder implementation - actual encryption would require external tools
   }
 
+  private static async handlePasswordRemoval(filePath: string, rule: TransformationRule): Promise<string> {
+    if (!rule.currentPassword || (!rule.removeUserPassword && !rule.removeOwnerPassword)) {
+      throw new Error('Current password and at least one removal option (user or owner password) must be specified');
+    }
+    
+    const tempDir = path.join(__dirname, '../../temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const outputFile = path.join(tempDir, `decrypted_${Date.now()}.pdf`);
+
+    try {
+      console.log(`🔐 Using qpdf to remove password protection from original file`);
+      
+      // Build qpdf command to decrypt the original PDF
+      const qpdfCommand = [
+        'qpdf',
+        `--password=${rule.currentPassword}`,
+        '--decrypt',
+        filePath,
+        outputFile
+      ].join(' ');
+
+      // Execute qpdf command
+      const { stdout, stderr } = await execAsync(qpdfCommand);
+      
+      if (stderr && !stderr.includes('processing')) {
+        console.warn(`⚠️ qpdf warning: ${stderr}`);
+      }
+
+      // Check if output file was created
+      if (!fs.existsSync(outputFile)) {
+        throw new Error('Password removal failed - output file not created. Please check if the password is correct.');
+      }
+
+      console.log(`✅ Password protection removed successfully`);
+      
+      if (rule.removeUserPassword && rule.removeOwnerPassword) {
+        console.log(`🔐 Both user and owner passwords removed`);
+      } else if (rule.removeUserPassword) {
+        console.log(`🔐 User password removed`);
+      } else if (rule.removeOwnerPassword) {
+        console.log(`🔐 Owner password removed`);
+      }
+
+      return outputFile; // Return path to decrypted file
+
+    } catch (error) {
+      console.error('🚫 Password removal failed:', error);
+      
+      // Cleanup on error
+      try {
+        if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+      } catch (cleanupError) {
+        console.warn('⚠️ Failed to cleanup temporary file on error:', cleanupError);
+      }
+      
+      if (error instanceof Error) {
+        if (error.message.includes('invalid password')) {
+          throw new Error('Invalid password provided. Please check the current password and try again.');
+        } else if (error.message.includes('not encrypted') || error.message.includes('no password')) {
+          throw new Error('The PDF does not appear to be password protected.');
+        } else {
+          throw new Error(`Password removal failed: ${error.message}`);
+        }
+      } else {
+        throw new Error('Unknown error occurred during password removal');
+      }
+    }
+  }
+
   private static async removePassword(pdfDoc: PDFDocument, currentPassword?: string, removeUserPassword?: boolean, removeOwnerPassword?: boolean): Promise<void> {
-    console.log(`🔒 Removing password protection`);
-    
-    // Note: pdf-lib has limited encryption support
-    // In a production environment, you might need to use external libraries
-    // or post-process with tools like qpdf for full encryption support
-    
-    if (currentPassword) {
-      console.log(`🔐 Current password would be removed: user=${!!currentPassword}, owner=${!!currentPassword}`);
-    }
-    
-    if (removeUserPassword || removeOwnerPassword) {
-      console.log(`🔐 Passwords would be removed: user=${!!removeUserPassword}, owner=${!!removeOwnerPassword}`);
-    }
-    
-    // Placeholder implementation - actual encryption would require external tools
+    // This method is now handled by handlePasswordRemoval before pdf-lib processing
+    // We keep this method for API compatibility but it doesn't need to do anything
+    console.log(`🔒 Password removal already handled before pdf-lib processing`);
   }
 
   // Helper method to parse color strings
