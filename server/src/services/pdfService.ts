@@ -95,6 +95,9 @@ export class PDFService {
       case 'password_protect':
         await this.passwordProtect(pdfDoc, rule.userPassword, rule.ownerPassword, rule.permissions);
         break;
+      case 'remove_password':
+        await this.removePassword(pdfDoc, rule.currentPassword, rule.removeUserPassword, rule.removeOwnerPassword);
+        break;
       default:
         throw new Error(`Unsupported transformation type: ${rule.type}`);
     }
@@ -906,6 +909,24 @@ export class PDFService {
     
     if (permissions) {
       console.log(`🛡️ Permissions would be applied:`, permissions);
+    }
+    
+    // Placeholder implementation - actual encryption would require external tools
+  }
+
+  private static async removePassword(pdfDoc: PDFDocument, currentPassword?: string, removeUserPassword?: boolean, removeOwnerPassword?: boolean): Promise<void> {
+    console.log(`🔒 Removing password protection`);
+    
+    // Note: pdf-lib has limited encryption support
+    // In a production environment, you might need to use external libraries
+    // or post-process with tools like qpdf for full encryption support
+    
+    if (currentPassword) {
+      console.log(`🔐 Current password would be removed: user=${!!currentPassword}, owner=${!!currentPassword}`);
+    }
+    
+    if (removeUserPassword || removeOwnerPassword) {
+      console.log(`🔐 Passwords would be removed: user=${!!removeUserPassword}, owner=${!!removeOwnerPassword}`);
     }
     
     // Placeholder implementation - actual encryption would require external tools

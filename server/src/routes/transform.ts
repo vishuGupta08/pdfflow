@@ -20,7 +20,7 @@ const transformSchema = Joi.object({
         'remove_pages', 'rotate_pages', 'add_watermark', 'merge_pdfs', 
         'compress', 'redact_text', 'add_page_numbers', 'rearrange_pages', 'extract_pages',
         'split_pdf', 'add_image', 'add_header_footer', 'add_blank_pages', 'crop_pages', 
-        'add_background', 'add_text_annotation', 'add_border', 'resize_pages', 'password_protect'
+        'add_background', 'add_text_annotation', 'add_border', 'resize_pages', 'password_protect', 'remove_password'
       ).required(),
       
       // Existing parameters
@@ -144,7 +144,12 @@ const transformSchema = Joi.object({
         accessibility: Joi.boolean().optional(),
         assembling: Joi.boolean().optional(),
         qualityPrinting: Joi.boolean().optional()
-      }).optional()
+      }).optional(),
+      
+      // Password removal options
+      currentPassword: Joi.string().min(1).max(128).optional(),
+      removeUserPassword: Joi.boolean().optional(),
+      removeOwnerPassword: Joi.boolean().optional()
     })
   ).min(1).required()
 });

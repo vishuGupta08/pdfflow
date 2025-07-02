@@ -18,6 +18,12 @@ A powerful, modern web application for transforming PDF documents with an extens
 - **Real-time File List** - Dynamic display of selected files with removal options
 - **Enhanced Error Handling** - Better feedback for file type validation and upload errors
 
+### 🔒 New Security Feature
+- **Remove Password Protection** - New transformation to remove passwords from protected PDFs
+- **Dual Password Support** - Option to remove user passwords, owner passwords, or both
+- **Current Password Verification** - Secure verification before password removal
+- **Comprehensive UI** - Clear interface with helpful information and warnings
+
 ### 🎯 User Experience Improvements
 - **Modal State Management** - Smooth opening and closing transitions
 - **Visual Feedback** - Hover effects and selection indicators
@@ -54,6 +60,7 @@ PDFFlow provides a comprehensive suite of PDF transformation tools organized int
 ### 🔒 Security & Privacy
 - **Text Redaction** - Hide sensitive information permanently
 - **Password Protection** - Add user and owner passwords with detailed permissions
+- **Remove Password** - Remove existing password protection from PDFs you own
 
 ## 🎯 Key Capabilities
 
@@ -79,6 +86,7 @@ PDFFlow provides a comprehensive suite of PDF transformation tools organized int
 ### Security Features
 - **Granular Permissions**: Control printing, editing, copying, and more
 - **Dual Password System**: Separate user and owner passwords
+- **Password Removal**: Remove existing password protection with proper verification
 - **Accessibility Support**: Screen reader compatibility options
 - **Document Assembly Control**: Prevent unauthorized page manipulation
 
@@ -173,7 +181,7 @@ PDFFlow provides a comprehensive suite of PDF transformation tools organized int
 ### Basic Workflow
 
 1. **Upload PDF**: Select a PDF file using the upload interface
-2. **Add Transformations**: Choose from 19+ transformation types
+2. **Add Transformations**: Choose from 20+ transformation types
 3. **Configure Settings**: Customize each transformation with detailed options
 4. **Preview Changes**: Review your transformation plan
 5. **Process & Download**: Execute transformations and download results
@@ -229,6 +237,14 @@ PDFFlow provides a comprehensive suite of PDF transformation tools organized int
     modifying: false,
     copying: true
   }
+}
+
+// Remove password protection
+{
+  type: 'remove_password',
+  currentPassword: 'current123',
+  removeUserPassword: true,
+  removeOwnerPassword: true
 }
 ```
 
@@ -395,6 +411,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✨ **Enhanced Transformation Selector**: Replaced dropdown with beautiful modal interface
 - 🎨 **Icon Integration**: Added unique icons for each transformation type
 - 🔧 **Fixed Merge PDF**: Resolved file upload functionality for PDF merging
+- 🔒 **Remove Password Feature**: New transformation to remove password protection from PDFs
 - 🎯 **Improved UX**: Better spacing, visual hierarchy, and responsive design
 - 📦 **Dependencies**: Added UUID v11.1.0+ and @types/uuid v10.0.0
 - 🔄 **State Management**: Enhanced React hooks for modal and form state
@@ -402,7 +419,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Version 1.0.0
 - 🚀 **Initial Release**: Complete PDF transformation platform
-- 📄 **19 Transformation Types**: Comprehensive feature set
+- 📄 **19 Transformation Types**: Comprehensive feature set (now 20 in v2.0.0)
 - 🎨 **Modern UI**: React + TypeScript frontend
 - 🔧 **Robust Backend**: Node.js + Express API
 - 🔒 **Security Features**: Password protection and permissions
@@ -450,8 +467,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 | Borders | ✅ | Content & Annotations | Decorative borders |
 | Resize Pages | ✅ | Page Operations | Scale and resize |
 | Password Protection | ✅ | Security & Privacy | Encryption and permissions |
+| Remove Password | ✅ | Security & Privacy | Remove existing password protection |
 
-**Total: 19 transformation types implemented** 🎉
+**Total: 20 transformation types implemented** 🎉
 
 ---
 

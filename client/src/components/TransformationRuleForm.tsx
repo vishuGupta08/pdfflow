@@ -1,4 +1,4 @@
-import { Plus, Trash2, Settings, RotateCw, Shield, Eye, Hash, Scissors, ArrowUpDown, Archive, Image, FileText, FilePlus, Crop, Palette, MessageSquare, Square, Maximize2, Lock, Copy, GitMerge } from 'lucide-react';
+import { Plus, Trash2, Settings, RotateCw, Shield, Eye, Hash, Scissors, ArrowUpDown, Archive, Image, FileText, FilePlus, Crop, Palette, MessageSquare, Square, Maximize2, Lock, Copy, GitMerge, KeyRound } from 'lucide-react';
 import type { TransformationRule, UploadedFile } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { useRef, useState } from 'react';
@@ -37,6 +37,7 @@ const transformationTypes = [
   // Security & Privacy
   { value: 'redact_text', label: 'Redact Text', icon: Eye, description: 'Hide sensitive information', category: 'Security & Privacy' },
   { value: 'password_protect', label: 'Password Protection', icon: Lock, description: 'Add password encryption and permissions', category: 'Security & Privacy' },
+  { value: 'remove_password', label: 'Remove Password', icon: KeyRound, description: 'Remove existing password protection from PDF', category: 'Security & Privacy' },
 ] as const;
 
 export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
@@ -1671,6 +1672,87 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+        );
+
+      case 'remove_password':
+        return (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Current Password
+              </label>
+              <input
+                type="password"
+                placeholder="Enter current PDF password"
+                className="input-field"
+                value={rule.currentPassword || ''}
+                onChange={(e) => updateRule(rule.id, { currentPassword: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Enter the current password to verify access to the PDF
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Remove Password Options
+              </label>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id={`remove-user-password-${rule.id}`}
+                    checked={rule.removeUserPassword || false}
+                    onChange={(e) => updateRule(rule.id, { removeUserPassword: e.target.checked })}
+                    className="checkbox"
+                  />
+                  <label htmlFor={`remove-user-password-${rule.id}`} className="text-sm text-gray-700">
+                    Remove User Password (Document opening password)
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id={`remove-owner-password-${rule.id}`}
+                    checked={rule.removeOwnerPassword || false}
+                    onChange={(e) => updateRule(rule.id, { removeOwnerPassword: e.target.checked })}
+                    className="checkbox"
+                  />
+                  <label htmlFor={`remove-owner-password-${rule.id}`} className="text-sm text-gray-700">
+                    Remove Owner Password (Permissions password)
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-start space-x-2">
+                <KeyRound className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium mb-1">Password Removal Info</p>
+                  <ul className="text-xs space-y-1">
+                    <li>• <strong>User Password:</strong> Allows anyone to open the PDF without a password</li>
+                    <li>• <strong>Owner Password:</strong> Removes restrictions on printing, editing, copying, etc.</li>
+                    <li>• <strong>Both Options:</strong> Can be selected to completely remove all password protection</li>
+                    <li>• <strong>Security:</strong> Ensure you have authorization to remove password protection</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {(!rule.removeUserPassword && !rule.removeOwnerPassword) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <div className="flex items-start space-x-2">
+                  <Shield className="h-5 w-5 text-amber-600 mt-0.5" />
+                  <div className="text-sm text-amber-800">
+                    <p className="font-medium mb-1">Selection Required</p>
+                    <p>Please select at least one password type to remove (User Password or Owner Password).</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
 
