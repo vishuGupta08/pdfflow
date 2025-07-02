@@ -18,8 +18,12 @@ const transformSchema = Joi.object({
     Joi.object({
       type: Joi.string().valid(
         'remove_pages', 'rotate_pages', 'add_watermark', 'merge_pdfs', 
-        'compress', 'redact_text', 'add_page_numbers', 'rearrange_pages', 'extract_pages'
+        'compress', 'redact_text', 'add_page_numbers', 'rearrange_pages', 'extract_pages',
+        'split_pdf', 'add_image', 'add_header_footer', 'add_blank_pages', 'crop_pages', 
+        'add_background', 'add_text_annotation', 'add_border', 'resize_pages', 'password_protect'
       ).required(),
+      
+      // Existing parameters
       pages: Joi.array().items(Joi.number().integer().min(1)).optional(),
       angle: Joi.number().valid(90, 180, 270, -90, -180, -270).optional(),
       text: Joi.string().optional(),
@@ -36,11 +40,111 @@ const transformSchema = Joi.object({
       }).optional(),
       redactWords: Joi.array().items(Joi.string()).optional(),
       fontSize: Joi.number().min(8).max(72).optional(),
-      fontColor: Joi.string().optional(),
+      fontColor: Joi.string().pattern(/^#[0-9A-Fa-f]{6}$/).optional(),
+      
       // Compression options
       compressionLevel: Joi.string().valid('low', 'medium', 'high', 'maximum', 'custom').optional(),
-      targetFileSize: Joi.number().integer().min(10).max(50000).optional(), // KB
-      imageQuality: Joi.number().integer().min(10).max(100).optional() // Percentage
+      targetFileSize: Joi.number().integer().min(10).max(50000).optional(),
+      imageQuality: Joi.number().integer().min(10).max(100).optional(),
+      
+      // Split PDF options
+      splitBy: Joi.string().valid('page_count', 'page_ranges', 'individual_pages').optional(),
+      pagesPerSplit: Joi.number().integer().min(1).optional(),
+      splitRanges: Joi.array().items(
+        Joi.object({
+          start: Joi.number().integer().min(1).required(),
+          end: Joi.number().integer().min(1).required(),
+          name: Joi.string().optional()
+        })
+      ).optional(),
+      
+      // Image options
+      imageFile: Joi.string().optional(),
+      imageWidth: Joi.number().min(1).optional(),
+      imageHeight: Joi.number().min(1).optional(),
+      maintainAspectRatio: Joi.boolean().optional(),
+      
+      // Header/Footer options
+      headerText: Joi.string().optional(),
+      footerText: Joi.string().optional(),
+      includePageNumber: Joi.boolean().optional(),
+      includeDate: Joi.boolean().optional(),
+      differentFirstPage: Joi.boolean().optional(),
+      headerImage: Joi.string().optional(),
+      footerImage: Joi.string().optional(),
+      
+      // Blank pages options
+      insertPosition: Joi.string().valid('beginning', 'end', 'after_page', 'before_page').optional(),
+      targetPageNumber: Joi.number().integer().min(1).optional(),
+      blankPageCount: Joi.number().integer().min(1).max(50).optional(),
+      blankPageSize: Joi.string().valid('same_as_original', 'a4', 'letter', 'legal', 'custom').optional(),
+      customWidth: Joi.number().min(1).optional(),
+      customHeight: Joi.number().min(1).optional(),
+      
+      // Crop options
+      cropBox: Joi.object({
+        x: Joi.number().min(0).required(),
+        y: Joi.number().min(0).required(),
+        width: Joi.number().min(1).required(),
+        height: Joi.number().min(1).required()
+      }).optional(),
+      cropPreset: Joi.string().valid('a4', 'letter', 'legal', 'square', 'custom').optional(),
+      cropMargins: Joi.object({
+        top: Joi.number().min(0).required(),
+        bottom: Joi.number().min(0).required(),
+        left: Joi.number().min(0).required(),
+        right: Joi.number().min(0).required()
+      }).optional(),
+      
+      // Background options
+      backgroundColor: Joi.string().pattern(/^#[0-9A-Fa-f]{6}$/).optional(),
+      backgroundImage: Joi.string().optional(),
+      backgroundOpacity: Joi.number().min(0).max(1).optional(),
+      backgroundScale: Joi.string().valid('fit', 'fill', 'stretch', 'tile').optional(),
+      
+      // Text annotation options
+      annotations: Joi.array().items(
+        Joi.object({
+          id: Joi.string().required(),
+          type: Joi.string().valid('text', 'sticky_note', 'highlight', 'underline', 'strikethrough').required(),
+          content: Joi.string().required(),
+          x: Joi.number().required(),
+          y: Joi.number().required(),
+          width: Joi.number().min(1).optional(),
+          height: Joi.number().min(1).optional(),
+          color: Joi.string().pattern(/^#[0-9A-Fa-f]{6}$/).optional(),
+          fontSize: Joi.number().min(6).max(72).optional()
+        })
+      ).optional(),
+      
+      // Border options
+      borderColor: Joi.string().pattern(/^#[0-9A-Fa-f]{6}$/).optional(),
+      borderWidth: Joi.number().min(1).max(20).optional(),
+      borderStyle: Joi.string().valid('solid', 'dashed', 'dotted').optional(),
+      borderRadius: Joi.number().min(0).optional(),
+      borderMargin: Joi.number().min(0).optional(),
+      
+      // Resize options
+      resizeMode: Joi.string().valid('scale', 'fit_to_size', 'custom_dimensions').optional(),
+      scaleFactor: Joi.number().min(0.1).max(10).optional(),
+      targetSize: Joi.string().valid('a4', 'letter', 'legal', 'custom').optional(),
+      newWidth: Joi.number().min(1).optional(),
+      newHeight: Joi.number().min(1).optional(),
+      maintainContentAspectRatio: Joi.boolean().optional(),
+      
+      // Password protection options
+      userPassword: Joi.string().min(1).max(128).optional(),
+      ownerPassword: Joi.string().min(1).max(128).optional(),
+      permissions: Joi.object({
+        printing: Joi.boolean().optional(),
+        modifying: Joi.boolean().optional(),
+        copying: Joi.boolean().optional(),
+        annotating: Joi.boolean().optional(),
+        filling: Joi.boolean().optional(),
+        accessibility: Joi.boolean().optional(),
+        assembling: Joi.boolean().optional(),
+        qualityPrinting: Joi.boolean().optional()
+      }).optional()
     })
   ).min(1).required()
 });

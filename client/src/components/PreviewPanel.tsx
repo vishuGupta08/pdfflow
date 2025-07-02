@@ -1,4 +1,4 @@
-import { Eye, FileText, RotateCw, Shield, Scissors, Hash, ArrowUpDown, Archive, CheckCircle } from 'lucide-react';
+import { CheckCircle, Eye, FileText, Scissors, RotateCw, Shield, Hash, ArrowUpDown, Archive, Image, FilePlus, Crop, Palette, MessageSquare, Square, Maximize2, Lock, Copy, GitMerge } from 'lucide-react';
 import type { TransformationRule, UploadedFile } from '../types';
 
 interface PreviewPanelProps {
@@ -44,16 +44,38 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, upl
         return <RotateCw {...iconProps} />;
       case 'add_watermark':
         return <Shield {...iconProps} />;
+      case 'merge_pdfs':
+        return <GitMerge {...iconProps} />;
       case 'redact_text':
         return <Eye {...iconProps} />;
       case 'add_page_numbers':
         return <Hash {...iconProps} />;
       case 'extract_pages':
-        return <FileText {...iconProps} />;
+        return <Scissors {...iconProps} />;
       case 'rearrange_pages':
         return <ArrowUpDown {...iconProps} />;
       case 'compress':
         return <Archive {...iconProps} />;
+      case 'split_pdf':
+        return <Copy {...iconProps} />;
+      case 'add_image':
+        return <Image {...iconProps} />;
+      case 'add_header_footer':
+        return <FileText {...iconProps} />;
+      case 'add_blank_pages':
+        return <FilePlus {...iconProps} />;
+      case 'crop_pages':
+        return <Crop {...iconProps} />;
+      case 'add_background':
+        return <Palette {...iconProps} />;
+      case 'add_text_annotation':
+        return <MessageSquare {...iconProps} />;
+      case 'add_border':
+        return <Square {...iconProps} />;
+      case 'resize_pages':
+        return <Maximize2 {...iconProps} />;
+      case 'password_protect':
+        return <Lock {...iconProps} />;
       default:
         return <FileText {...iconProps} />;
     }
@@ -67,6 +89,8 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, upl
         return `Rotate pages ${rule.pages?.join(', ') || 'None'} by ${rule.angle || 90}°`;
       case 'add_watermark':
         return `Add watermark "${rule.text || 'WATERMARK'}" at ${rule.position || 'center'} (${Math.round((rule.opacity || 0.3) * 100)}% opacity)`;
+      case 'merge_pdfs':
+        return `Merge ${rule.mergeFiles?.length || 0} PDF files with current document`;
       case 'redact_text':
         return `Redact: ${rule.redactWords?.join(', ') || 'No words specified'}`;
       case 'add_page_numbers':
@@ -75,6 +99,66 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, upl
         return `Extract pages ${rule.pageRange?.start || 1} to ${rule.pageRange?.end || 1}`;
       case 'rearrange_pages':
         return `Rearrange to order: ${rule.pageOrder?.join(', ') || 'No order specified'}`;
+      case 'split_pdf': {
+        const splitMethod = rule.splitBy || 'page_count';
+        if (splitMethod === 'page_count') {
+          return `Split into documents of ${rule.pagesPerSplit || 1} pages each`;
+        } else if (splitMethod === 'page_ranges') {
+          return `Split into ${rule.splitRanges?.length || 0} custom ranges`;
+        } else {
+          return `Split into individual pages`;
+        }
+      }
+      case 'add_image':
+        return `Add image at ${rule.position || 'center'}${rule.imageWidth && rule.imageHeight ? ` (${rule.imageWidth}x${rule.imageHeight}px)` : ''}`;
+      case 'add_header_footer': {
+        const headerFooterParts = [];
+        if (rule.headerText) headerFooterParts.push(`Header: "${rule.headerText}"`);
+        if (rule.footerText) headerFooterParts.push(`Footer: "${rule.footerText}"`);
+        if (rule.includePageNumber) headerFooterParts.push('Page numbers');
+        if (rule.includeDate) headerFooterParts.push('Date');
+        return headerFooterParts.length > 0 ? headerFooterParts.join(', ') : 'Add headers/footers';
+      }
+      case 'add_blank_pages':
+        return `Add ${rule.blankPageCount || 1} blank page(s) ${rule.insertPosition === 'beginning' ? 'at beginning' : rule.insertPosition === 'end' ? 'at end' : `${rule.insertPosition} page ${rule.targetPageNumber || 1}`} (${rule.blankPageSize || 'same size'})`;
+      case 'crop_pages': {
+        const pageCount = rule.pages?.length || 0;
+        const cropMethod = rule.cropPreset === 'custom' ? 'custom margins' : rule.cropPreset || 'custom';
+        return `Crop ${pageCount > 0 ? `${pageCount} pages` : 'all pages'} using ${cropMethod}`;
+      }
+      case 'add_background': {
+        const bgParts = [];
+        if (rule.backgroundColor) bgParts.push(`Color: ${rule.backgroundColor}`);
+        if (rule.backgroundImage) bgParts.push('Background image');
+        return bgParts.length > 0 ? `Background - ${bgParts.join(', ')}` : 'Add background';
+      }
+      case 'add_text_annotation':
+        return `Add ${rule.annotations?.length || 0} text annotation(s)`;
+      case 'add_border': {
+        const borderPages = rule.pages?.length || 0;
+        return `Add ${rule.borderColor || 'black'} border (${rule.borderWidth || 2}pt, ${rule.borderStyle || 'solid'}) to ${borderPages > 0 ? `${borderPages} pages` : 'all pages'}`;
+      }
+      case 'resize_pages': {
+        const resizePages = rule.pages?.length || 0;
+        const resizeMethod = rule.resizeMode || 'scale';
+        let resizeDesc = '';
+        if (resizeMethod === 'scale') {
+          resizeDesc = `scale by ${rule.scaleFactor || 1}x`;
+        } else if (resizeMethod === 'fit_to_size') {
+          resizeDesc = `fit to ${rule.targetSize || 'A4'}`;
+        } else {
+          resizeDesc = `custom dimensions ${rule.newWidth}x${rule.newHeight}pt`;
+        }
+        return `Resize ${resizePages > 0 ? `${resizePages} pages` : 'all pages'} - ${resizeDesc}`;
+      }
+      case 'password_protect': {
+        const protectionParts = [];
+        if (rule.userPassword) protectionParts.push('User password');
+        if (rule.ownerPassword) protectionParts.push('Owner password');
+        const permissionCount = rule.permissions ? Object.values(rule.permissions).filter(Boolean).length : 0;
+        if (permissionCount > 0) protectionParts.push(`${permissionCount} permissions`);
+        return protectionParts.length > 0 ? `Password protection - ${protectionParts.join(', ')}` : 'Add password protection';
+      }
       case 'compress': {
         const level = rule.compressionLevel || 'medium';
         const quality = rule.imageQuality || 85;
@@ -109,6 +193,8 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, upl
         return 'Rotate Pages';
       case 'add_watermark':
         return 'Add Watermark';
+      case 'merge_pdfs':
+        return 'Merge PDFs';
       case 'redact_text':
         return 'Redact Text';
       case 'add_page_numbers':
@@ -119,6 +205,26 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, upl
         return 'Rearrange Pages';
       case 'compress':
         return 'Compress PDF';
+      case 'split_pdf':
+        return 'Split PDF';
+      case 'add_image':
+        return 'Add Image';
+      case 'add_header_footer':
+        return 'Headers & Footers';
+      case 'add_blank_pages':
+        return 'Add Blank Pages';
+      case 'crop_pages':
+        return 'Crop Pages';
+      case 'add_background':
+        return 'Add Background';
+      case 'add_text_annotation':
+        return 'Text Annotations';
+      case 'add_border':
+        return 'Add Border';
+      case 'resize_pages':
+        return 'Resize Pages';
+      case 'password_protect':
+        return 'Password Protection';
       default:
         return 'Unknown';
     }

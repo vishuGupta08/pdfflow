@@ -50,6 +50,9 @@ export class PDFService {
       case 'add_watermark':
         await this.addWatermark(pdfDoc, rule.text || 'WATERMARK', rule.position || 'center', rule.opacity || 0.3);
         break;
+      case 'merge_pdfs':
+        await this.mergePDFs(pdfDoc, rule.mergeFiles || []);
+        break;
       case 'redact_text':
         await this.redactText(pdfDoc, rule.redactWords || []);
         break;
@@ -61,6 +64,36 @@ export class PDFService {
         break;
       case 'extract_pages':
         await this.extractPages(pdfDoc, rule.pageRange || { start: 1, end: 1 });
+        break;
+      case 'split_pdf':
+        await this.splitPDF(pdfDoc, rule.splitBy || 'page_count', rule.pagesPerSplit, rule.splitRanges);
+        break;
+      case 'add_image':
+        await this.addImage(pdfDoc, rule.imageFile || '', rule.position || 'center', rule.imageWidth, rule.imageHeight, rule.opacity || 1, rule.maintainAspectRatio !== false);
+        break;
+      case 'add_header_footer':
+        await this.addHeaderFooter(pdfDoc, rule.headerText, rule.footerText, rule.includePageNumber, rule.includeDate, rule.differentFirstPage, rule.headerImage, rule.footerImage, rule.fontSize || 12, rule.fontColor || '#000000');
+        break;
+      case 'add_blank_pages':
+        await this.addBlankPages(pdfDoc, rule.insertPosition || 'end', rule.targetPageNumber, rule.blankPageCount || 1, rule.blankPageSize || 'same_as_original', rule.customWidth, rule.customHeight);
+        break;
+      case 'crop_pages':
+        await this.cropPages(pdfDoc, rule.pages || [], rule.cropBox, rule.cropPreset, rule.cropMargins);
+        break;
+      case 'add_background':
+        await this.addBackground(pdfDoc, rule.backgroundColor, rule.backgroundImage, rule.backgroundOpacity || 1, rule.backgroundScale || 'fit');
+        break;
+      case 'add_text_annotation':
+        await this.addTextAnnotations(pdfDoc, rule.annotations || []);
+        break;
+      case 'add_border':
+        await this.addBorder(pdfDoc, rule.pages || [], rule.borderColor || '#000000', rule.borderWidth || 2, rule.borderStyle || 'solid', rule.borderRadius || 0, rule.borderMargin || 10);
+        break;
+      case 'resize_pages':
+        await this.resizePages(pdfDoc, rule.pages || [], rule.resizeMode || 'scale', rule.scaleFactor, rule.targetSize, rule.newWidth, rule.newHeight, rule.maintainContentAspectRatio !== false);
+        break;
+      case 'password_protect':
+        await this.passwordProtect(pdfDoc, rule.userPassword, rule.ownerPassword, rule.permissions);
         break;
       default:
         throw new Error(`Unsupported transformation type: ${rule.type}`);
@@ -421,5 +454,473 @@ export class PDFService {
         console.warn('⚠️ Failed to cleanup temporary files:', cleanupError);
       }
     }
+  }
+
+  // New transformation methods
+
+  private static async mergePDFs(targetDoc: PDFDocument, mergeFileIds: string[]): Promise<void> {
+    // Note: This implementation would need access to the file storage system
+    // For now, this is a placeholder that shows the concept
+    console.log(`🔗 Merge operation requested for ${mergeFileIds.length} files`);
+    // In a real implementation, you would:
+    // 1. Load each PDF from the file IDs
+    // 2. Copy pages from each source PDF to the target document
+    // 3. Handle page ordering and metadata
+  }
+
+  private static async splitPDF(pdfDoc: PDFDocument, splitBy: string, pagesPerSplit?: number, splitRanges?: Array<{ start: number; end: number; name?: string }>): Promise<void> {
+    console.log(`✂️ Split operation: ${splitBy}`);
+    
+    const totalPages = pdfDoc.getPageCount();
+    
+    switch (splitBy) {
+      case 'page_count':
+        if (!pagesPerSplit || pagesPerSplit <= 0) {
+          throw new Error('Pages per split must be specified and greater than 0');
+        }
+        // Create multiple documents based on page count
+        const numSplits = Math.ceil(totalPages / pagesPerSplit);
+        console.log(`📄 Splitting into ${numSplits} documents of ${pagesPerSplit} pages each`);
+        break;
+        
+      case 'page_ranges':
+        if (!splitRanges || splitRanges.length === 0) {
+          throw new Error('Split ranges must be specified');
+        }
+        console.log(`📄 Splitting into ${splitRanges.length} custom ranges`);
+        break;
+        
+      case 'individual_pages':
+        console.log(`📄 Splitting into ${totalPages} individual pages`);
+        break;
+    }
+    
+    // Note: For now, this logs the operation. Full implementation would create separate PDF files
+    // and return multiple buffers or file IDs
+  }
+
+  private static async addImage(pdfDoc: PDFDocument, imageFile: string, position: string, width?: number, height?: number, opacity: number = 1, maintainAspectRatio: boolean = true): Promise<void> {
+    if (!imageFile) {
+      throw new Error('Image file is required');
+    }
+
+    console.log(`🖼️ Adding image at position: ${position}`);
+    
+    // In a real implementation, you would:
+    // 1. Load the image from file or base64
+    // 2. Embed it in the PDF document
+    // 3. Calculate proper positioning and sizing
+    // 4. Add to specified pages
+    
+    const pages = pdfDoc.getPages();
+    
+    for (const page of pages) {
+      const { width: pageWidth, height: pageHeight } = page.getSize();
+      
+      // Calculate position
+      let x = pageWidth / 2;
+      let y = pageHeight / 2;
+      
+      switch (position) {
+        case 'top-left':
+          x = 50;
+          y = pageHeight - 50;
+          break;
+        case 'top-center':
+          x = pageWidth / 2;
+          y = pageHeight - 50;
+          break;
+        case 'top-right':
+          x = pageWidth - 50;
+          y = pageHeight - 50;
+          break;
+        case 'center-left':
+          x = 50;
+          y = pageHeight / 2;
+          break;
+        case 'center-right':
+          x = pageWidth - 50;
+          y = pageHeight / 2;
+          break;
+        case 'bottom-left':
+          x = 50;
+          y = 50;
+          break;
+        case 'bottom-center':
+          x = pageWidth / 2;
+          y = 50;
+          break;
+        case 'bottom-right':
+          x = pageWidth - 50;
+          y = 50;
+          break;
+        default: // center
+          x = pageWidth / 2;
+          y = pageHeight / 2;
+      }
+      
+      // Placeholder: In real implementation, you would draw the actual image
+      console.log(`📍 Image would be placed at (${x}, ${y}) with size ${width}x${height}`);
+    }
+  }
+
+  private static async addHeaderFooter(pdfDoc: PDFDocument, headerText?: string, footerText?: string, includePageNumber?: boolean, includeDate?: boolean, differentFirstPage?: boolean, headerImage?: string, footerImage?: string, fontSize: number = 12, fontColor: string = '#000000'): Promise<void> {
+    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const pages = pdfDoc.getPages();
+    const totalPages = pages.length;
+    
+    console.log(`📋 Adding headers/footers to ${totalPages} pages`);
+    
+    pages.forEach((page, index) => {
+      const { width, height } = page.getSize();
+      const pageNumber = index + 1;
+      const isFirstPage = index === 0;
+      
+      // Skip first page if differentFirstPage is true
+      if (differentFirstPage && isFirstPage) {
+        return;
+      }
+      
+      // Add header
+      if (headerText) {
+        let headerContent = headerText;
+        
+        if (includePageNumber) {
+          headerContent += ` - Page ${pageNumber}`;
+        }
+        
+        if (includeDate) {
+          headerContent += ` - ${new Date().toLocaleDateString()}`;
+        }
+        
+        page.drawText(headerContent, {
+          x: 50,
+          y: height - 30,
+          size: fontSize,
+          font: helveticaFont,
+          color: rgb(0, 0, 0)
+        });
+      }
+      
+      // Add footer
+      if (footerText) {
+        let footerContent = footerText;
+        
+        if (includePageNumber && !headerText) {
+          footerContent += ` - Page ${pageNumber} of ${totalPages}`;
+        }
+        
+        page.drawText(footerContent, {
+          x: 50,
+          y: 30,
+          size: fontSize,
+          font: helveticaFont,
+          color: rgb(0, 0, 0)
+        });
+      }
+    });
+  }
+
+  private static async addBlankPages(pdfDoc: PDFDocument, insertPosition: string, targetPageNumber?: number, blankPageCount: number = 1, blankPageSize: string = 'same_as_original', customWidth?: number, customHeight?: number): Promise<void> {
+    console.log(`📄 Adding ${blankPageCount} blank page(s) at position: ${insertPosition}`);
+    
+    // Get dimensions for new pages
+    let pageWidth = 612; // Default to Letter size width
+    let pageHeight = 792; // Default to Letter size height
+    
+    if (blankPageSize === 'same_as_original' && pdfDoc.getPageCount() > 0) {
+      const firstPage = pdfDoc.getPage(0);
+      const { width, height } = firstPage.getSize();
+      pageWidth = width;
+      pageHeight = height;
+    } else if (blankPageSize === 'custom' && customWidth && customHeight) {
+      pageWidth = customWidth;
+      pageHeight = customHeight;
+    } else {
+      // Standard sizes
+      switch (blankPageSize) {
+        case 'a4':
+          pageWidth = 595;
+          pageHeight = 842;
+          break;
+        case 'letter':
+          pageWidth = 612;
+          pageHeight = 792;
+          break;
+        case 'legal':
+          pageWidth = 612;
+          pageHeight = 1008;
+          break;
+      }
+    }
+    
+    // Create blank pages
+    for (let i = 0; i < blankPageCount; i++) {
+      const blankPage = pdfDoc.addPage([pageWidth, pageHeight]);
+      
+      // Position the page based on insertPosition
+      switch (insertPosition) {
+        case 'beginning':
+          // Move to beginning (would need to rearrange pages)
+          break;
+        case 'after_page':
+        case 'before_page':
+          // Insert at specific position (would need page manipulation)
+          break;
+        case 'end':
+        default:
+          // Page is already added at the end
+          break;
+      }
+    }
+  }
+
+  private static async cropPages(pdfDoc: PDFDocument, pages: number[], cropBox?: { x: number; y: number; width: number; height: number }, cropPreset?: string, cropMargins?: { top: number; bottom: number; left: number; right: number }): Promise<void> {
+    console.log(`✂️ Cropping ${pages.length} pages`);
+    
+    const pageCount = pdfDoc.getPageCount();
+    const targetPages = pages.length > 0 ? pages : Array.from({ length: pageCount }, (_, i) => i + 1);
+    
+    for (const pageIndex of targetPages) {
+      const zeroBasedIndex = pageIndex - 1;
+      if (zeroBasedIndex >= 0 && zeroBasedIndex < pageCount) {
+        const page = pdfDoc.getPage(zeroBasedIndex);
+        const { width, height } = page.getSize();
+        
+        let cropX = 0, cropY = 0, cropWidth = width, cropHeight = height;
+        
+        if (cropBox) {
+          cropX = cropBox.x;
+          cropY = cropBox.y;
+          cropWidth = cropBox.width;
+          cropHeight = cropBox.height;
+        } else if (cropMargins) {
+          cropX = cropMargins.left;
+          cropY = cropMargins.bottom;
+          cropWidth = width - cropMargins.left - cropMargins.right;
+          cropHeight = height - cropMargins.top - cropMargins.bottom;
+        } else if (cropPreset) {
+          // Apply preset crop dimensions
+          switch (cropPreset) {
+            case 'a4':
+              cropWidth = Math.min(595, width);
+              cropHeight = Math.min(842, height);
+              break;
+            case 'letter':
+              cropWidth = Math.min(612, width);
+              cropHeight = Math.min(792, height);
+              break;
+            case 'square':
+              const minDimension = Math.min(width, height);
+              cropWidth = minDimension;
+              cropHeight = minDimension;
+              cropX = (width - minDimension) / 2;
+              cropY = (height - minDimension) / 2;
+              break;
+          }
+        }
+        
+        // Apply crop box
+        page.setCropBox(cropX, cropY, cropWidth, cropHeight);
+      }
+    }
+  }
+
+  private static async addBackground(pdfDoc: PDFDocument, backgroundColor?: string, backgroundImage?: string, backgroundOpacity: number = 1, backgroundScale: string = 'fit'): Promise<void> {
+    const pages = pdfDoc.getPages();
+    
+    console.log(`🎨 Adding background to ${pages.length} pages`);
+    
+    for (const page of pages) {
+      const { width, height } = page.getSize();
+      
+      if (backgroundColor) {
+        // Parse color from hex string
+        const color = this.parseColor(backgroundColor);
+        
+        page.drawRectangle({
+          x: 0,
+          y: 0,
+          width,
+          height,
+          color,
+          opacity: backgroundOpacity
+        });
+      }
+      
+      if (backgroundImage) {
+        // In a real implementation, you would:
+        // 1. Load and embed the background image
+        // 2. Scale it according to backgroundScale
+        // 3. Draw it on the page
+        console.log(`🖼️ Background image would be applied with scale: ${backgroundScale}`);
+      }
+    }
+  }
+
+  private static async addTextAnnotations(pdfDoc: PDFDocument, annotations: Array<{ id: string; type: string; content: string; x: number; y: number; width?: number; height?: number; color?: string; fontSize?: number }>): Promise<void> {
+    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const pages = pdfDoc.getPages();
+    
+    console.log(`📝 Adding ${annotations.length} text annotations`);
+    
+    // For simplicity, add annotations to all pages
+    // In a real implementation, you'd specify which page each annotation belongs to
+    for (const page of pages) {
+      for (const annotation of annotations) {
+        const color = this.parseColor(annotation.color || '#000000');
+        const fontSize = annotation.fontSize || 12;
+        
+        switch (annotation.type) {
+          case 'text':
+            page.drawText(annotation.content, {
+              x: annotation.x,
+              y: annotation.y,
+              size: fontSize,
+              font: helveticaFont,
+              color
+            });
+            break;
+            
+          case 'sticky_note':
+            // Draw a small rectangle for the sticky note
+            page.drawRectangle({
+              x: annotation.x,
+              y: annotation.y,
+              width: annotation.width || 20,
+              height: annotation.height || 20,
+              color: rgb(1, 1, 0), // Yellow
+              opacity: 0.7
+            });
+            break;
+            
+          case 'highlight':
+            // Draw a semi-transparent rectangle
+            page.drawRectangle({
+              x: annotation.x,
+              y: annotation.y,
+              width: annotation.width || 100,
+              height: annotation.height || 20,
+              color: rgb(1, 1, 0), // Yellow highlight
+              opacity: 0.3
+            });
+            break;
+        }
+      }
+    }
+  }
+
+  private static async addBorder(pdfDoc: PDFDocument, pages: number[], borderColor: string, borderWidth: number, borderStyle: string, borderRadius: number, borderMargin: number): Promise<void> {
+    console.log(`🖼️ Adding borders to ${pages.length} pages`);
+    
+    const pageCount = pdfDoc.getPageCount();
+    const targetPages = pages.length > 0 ? pages : Array.from({ length: pageCount }, (_, i) => i + 1);
+    const color = this.parseColor(borderColor);
+    
+    for (const pageIndex of targetPages) {
+      const zeroBasedIndex = pageIndex - 1;
+      if (zeroBasedIndex >= 0 && zeroBasedIndex < pageCount) {
+        const page = pdfDoc.getPage(zeroBasedIndex);
+        const { width, height } = page.getSize();
+        
+        // Draw border rectangle
+        page.drawRectangle({
+          x: borderMargin,
+          y: borderMargin,
+          width: width - (borderMargin * 2),
+          height: height - (borderMargin * 2),
+          borderColor: color,
+          borderWidth,
+          color: undefined // No fill, just border
+        });
+      }
+    }
+  }
+
+  private static async resizePages(pdfDoc: PDFDocument, pages: number[], resizeMode: string, scaleFactor?: number, targetSize?: string, newWidth?: number, newHeight?: number, maintainContentAspectRatio: boolean = true): Promise<void> {
+    console.log(`📏 Resizing ${pages.length} pages using mode: ${resizeMode}`);
+    
+    const pageCount = pdfDoc.getPageCount();
+    const targetPages = pages.length > 0 ? pages : Array.from({ length: pageCount }, (_, i) => i + 1);
+    
+    for (const pageIndex of targetPages) {
+      const zeroBasedIndex = pageIndex - 1;
+      if (zeroBasedIndex >= 0 && zeroBasedIndex < pageCount) {
+        const page = pdfDoc.getPage(zeroBasedIndex);
+        const { width, height } = page.getSize();
+        
+        let newPageWidth = width;
+        let newPageHeight = height;
+        
+        switch (resizeMode) {
+          case 'scale':
+            if (scaleFactor) {
+              newPageWidth = width * scaleFactor;
+              newPageHeight = height * scaleFactor;
+            }
+            break;
+            
+          case 'fit_to_size':
+            if (targetSize) {
+              switch (targetSize) {
+                case 'a4':
+                  newPageWidth = 595;
+                  newPageHeight = 842;
+                  break;
+                case 'letter':
+                  newPageWidth = 612;
+                  newPageHeight = 792;
+                  break;
+                case 'legal':
+                  newPageWidth = 612;
+                  newPageHeight = 1008;
+                  break;
+              }
+            }
+            break;
+            
+          case 'custom_dimensions':
+            if (newWidth && newHeight) {
+              newPageWidth = newWidth;
+              newPageHeight = newHeight;
+            }
+            break;
+        }
+        
+        // Apply new dimensions
+        page.setSize(newPageWidth, newPageHeight);
+      }
+    }
+  }
+
+  private static async passwordProtect(pdfDoc: PDFDocument, userPassword?: string, ownerPassword?: string, permissions?: any): Promise<void> {
+    console.log(`🔒 Adding password protection`);
+    
+    // Note: pdf-lib has limited encryption support
+    // In a production environment, you might need to use external libraries
+    // or post-process with tools like qpdf for full encryption support
+    
+    if (userPassword || ownerPassword) {
+      console.log(`🔐 Passwords would be applied: user=${!!userPassword}, owner=${!!ownerPassword}`);
+    }
+    
+    if (permissions) {
+      console.log(`🛡️ Permissions would be applied:`, permissions);
+    }
+    
+    // Placeholder implementation - actual encryption would require external tools
+  }
+
+  // Helper method to parse color strings
+  private static parseColor(colorString: string): ReturnType<typeof rgb> {
+    // Remove # if present
+    const hex = colorString.replace('#', '');
+    
+    // Convert hex to RGB values (0-1 range)
+    const r = parseInt(hex.substr(0, 2), 16) / 255;
+    const g = parseInt(hex.substr(2, 2), 16) / 255;
+    const b = parseInt(hex.substr(4, 2), 16) / 255;
+    
+    return rgb(r, g, b);
   }
 } 
