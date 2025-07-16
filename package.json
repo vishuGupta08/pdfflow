@@ -15,10 +15,21 @@
     "build:server": "cd server && npm run build",
     "build:client": "cd client && npm run build",
     "start": "cd server && npm start",
-    "install:all": "npm install && cd server && npm install && cd ../client && npm install"
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "test": "npm run test:server && npm run test:client && npm run test:integration",
+    "test:server": "cd server && npm test",
+    "test:client": "cd client && npm test",
+    "test:integration": "jest tests/integration --config=jest.integration.config.js",
+    "test:transformations": "jest tests/integration/transformation-comprehensive.test.js tests/integration/transformation-advanced.test.js --config=jest.integration.config.js",
+    "test:watch": "concurrently \"cd server && npm run test:watch\" \"cd client && npm run test:watch\"",
+    "test:coverage": "npm run test:server -- --coverage && npm run test:client -- --coverage",
+    "test:e2e": "jest tests/e2e --config=jest.e2e.config.js"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "@types/jest": "^29.5.8"
   },
   "keywords": [
     "pdf",

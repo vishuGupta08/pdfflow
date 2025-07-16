@@ -20,11 +20,13 @@ const transformSchema = Joi.object({
         'remove_pages', 'rotate_pages', 'add_watermark', 'merge_pdfs', 
         'compress', 'redact_text', 'add_page_numbers', 'rearrange_pages', 'extract_pages',
         'split_pdf', 'add_image', 'add_header_footer', 'add_blank_pages', 'crop_pages', 
-        'add_background', 'add_text_annotation', 'add_border', 'resize_pages', 'password_protect', 'remove_password'
+        'add_background', 'text_annotation', 'add_border', 'resize_pages', 'password_protect', 
+        'remove_password', 'text-replace', 'watermark', 'extract-pages', 'edit_pdf'
       ).required(),
       
-      // Existing parameters
+      // Common parameters
       pages: Joi.array().items(Joi.number().integer().min(1)).optional(),
+      target: Joi.string().valid('all', 'pages', 'range').optional(),
       angle: Joi.number().valid(90, 180, 270, -90, -180, -270).optional(),
       text: Joi.string().optional(),
       position: Joi.string().valid(
@@ -32,6 +34,16 @@ const transformSchema = Joi.object({
         'center-right', 'bottom-left', 'bottom-center', 'bottom-right'
       ).optional(),
       opacity: Joi.number().min(0).max(1).optional(),
+      
+      // Text replacement
+      find: Joi.string().optional(),
+      replace: Joi.string().optional(),
+      
+      // Compression
+      level: Joi.string().valid('low', 'medium', 'high', 'maximum').optional(),
+      compressionLevel: Joi.string().valid('low', 'medium', 'high', 'maximum', 'custom').optional(),
+      
+      // Other options
       mergeFiles: Joi.array().items(Joi.string()).optional(),
       pageOrder: Joi.array().items(Joi.number().integer().min(1)).optional(),
       pageRange: Joi.object({
@@ -41,9 +53,6 @@ const transformSchema = Joi.object({
       redactWords: Joi.array().items(Joi.string()).optional(),
       fontSize: Joi.number().min(8).max(72).optional(),
       fontColor: Joi.string().pattern(/^#[0-9A-Fa-f]{6}$/).optional(),
-      
-      // Compression options
-      compressionLevel: Joi.string().valid('low', 'medium', 'high', 'maximum', 'custom').optional(),
       targetFileSize: Joi.number().integer().min(10).max(50000).optional(),
       imageQuality: Joi.number().integer().min(10).max(100).optional(),
       
@@ -147,9 +156,36 @@ const transformSchema = Joi.object({
       }).optional(),
       
       // Password removal options
-      currentPassword: Joi.string().min(1).max(128).optional(),
+      currentPassword: Joi.string().optional(),
       removeUserPassword: Joi.boolean().optional(),
-      removeOwnerPassword: Joi.boolean().optional()
+      removeOwnerPassword: Joi.boolean().optional(),
+      
+      // PDF editing options
+      edits: Joi.array().items(
+        Joi.object({
+          id: Joi.string().required(),
+          type: Joi.string().valid('text', 'image', 'highlight', 'note', 'shape', 'arrow', 'redaction').required(),
+          page: Joi.number().integer().min(1).required(),
+          x: Joi.number().required(),
+          y: Joi.number().required(),
+          width: Joi.number().min(1).optional(),
+          height: Joi.number().min(1).optional(),
+          content: Joi.string().optional(),
+          style: Joi.object({
+            fontSize: Joi.number().min(6).max(72).optional(),
+            fontFamily: Joi.string().optional(),
+            color: Joi.string().pattern(/^#[0-9A-Fa-f]{6}$/).optional(),
+            backgroundColor: Joi.string().pattern(/^#[0-9A-Fa-f]{6}$/).optional(),
+            borderColor: Joi.string().pattern(/^#[0-9A-Fa-f]{6}$/).optional(),
+            borderWidth: Joi.number().min(1).max(20).optional(),
+            opacity: Joi.number().min(0).max(1).optional(),
+            bold: Joi.boolean().optional(),
+            italic: Joi.boolean().optional(),
+            underline: Joi.boolean().optional()
+          }).optional(),
+          imageData: Joi.string().optional() // base64 image data
+        })
+      ).optional()
     })
   ).min(1).required()
 });
@@ -162,9 +198,22 @@ router.post('/', async (req: Request, res: Response) => {
     // Validate request body
     const { error, value } = transformSchema.validate(req.body);
     if (error) {
+      let errorMessage = error.details[0].message;
+      
+      // Customize error messages for better user experience
+      if (errorMessage.includes('"transformations" must contain at least 1 items')) {
+        errorMessage = 'At least one transformation rule is required';
+      } else if (errorMessage.includes('"transformations[0].type" must be one of')) {
+        errorMessage = 'Invalid transformation type';
+      } else if (errorMessage.includes('"transformations[0].level" must be one of')) {
+        errorMessage = 'Invalid compression level. Use: low, medium, high, maximum';
+      } else if (errorMessage.includes('"transformations[0].level" is not allowed')) {
+        errorMessage = 'Invalid compression level. Use: low, medium, high, maximum';
+      }
+      
       return res.status(400).json({
         success: false,
-        error: error.details[0].message
+        error: errorMessage
       });
     }
 
@@ -180,8 +229,36 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     try {
+      // Map transformation types from API format to service format
+      const mappedTransformations = transformations.map((t: any) => {
+        const mapped = { ...t };
+        
+        // Map transformation types
+        if (t.type === 'watermark') {
+          mapped.type = 'add_watermark';
+        } else if (t.type === 'text-replace') {
+          mapped.type = 'redact_text'; // Map to closest available
+        } else if (t.type === 'extract-pages') {
+          mapped.type = 'extract_pages';
+          // Map pages array to pageRange format
+          if (t.pages && t.pages.length > 0) {
+            mapped.pageRange = {
+              start: Math.min(...t.pages),
+              end: Math.max(...t.pages)
+            };
+          }
+        }
+        
+        // Map compression level field
+        if (t.level && !t.compressionLevel) {
+          mapped.compressionLevel = t.level;
+        }
+        
+        return mapped;
+      });
+      
       // Apply transformations
-      const transformedPDF = await PDFService.transformPDF(fileData.path, transformations);
+      const transformedPDF = await PDFService.transformPDF(fileData.path, mappedTransformations);
       
       // Generate preview ID and store transformed PDF
       const previewId = uuidv4();
@@ -200,20 +277,40 @@ router.post('/', async (req: Request, res: Response) => {
         transformedFiles.delete(downloadId);
       }, 60 * 60 * 1000);
 
+      // Generate a descriptive filename based on transformations
+      const baseFileName = fileData.originalName.replace('.pdf', '');
+      const transformationTypes = mappedTransformations.map((t: any) => {
+        if (t.type === 'compress') return 'compressed';
+        if (t.type === 'add_watermark') return 'watermarked';
+        if (t.type === 'extract_pages') return 'extracted';
+        return t.type;
+      }).join('-');
+      const transformedFileName = `${baseFileName}-${transformationTypes}.pdf`;
+
       res.json({
         success: true,
         message: 'PDF transformed successfully',
         downloadId,
         previewId,
-        fileName: fileData.originalName
+        fileName: transformedFileName
       });
       
     } catch (transformError) {
       console.error('Transformation error:', transformError);
-      res.status(500).json({
-        success: false,
-        error: transformError instanceof Error ? transformError.message : 'Unknown transformation error'
-      });
+      const errorMessage = transformError instanceof Error ? transformError.message : 'Unknown transformation error';
+      
+      // Check if it's a validation error
+      if (errorMessage.includes('Invalid page numbers')) {
+        res.status(400).json({
+          success: false,
+          error: errorMessage
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: errorMessage
+        });
+      }
     }
   } catch (error) {
     console.error('Transform route error:', error);
@@ -247,4 +344,4 @@ router.get('/:resultId', (req, res) => {
 });
 
 export { transformationResults };
-export default router; 
+export default router;

@@ -10,6 +10,7 @@ import uploadRoutes from './routes/upload';
 import transformRoutes from './routes/transform';
 import downloadRoutes from './routes/download';
 import previewRoutes from './routes/preview';
+import editRoutes from './routes/edit';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -76,6 +77,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/transform', transformRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/preview', previewRoutes);
+app.use('/api/edit', editRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -109,4 +111,4 @@ app.listen(PORT, () => {
   console.log(`🚀 PDFFlow server running on port ${PORT}`);
   console.log(`📁 Uploads directory: ${uploadsDir}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-}); 
+});

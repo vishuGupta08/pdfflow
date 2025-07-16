@@ -3,8 +3,9 @@ import { FileUpload } from './components/FileUpload'
 import { TransformationRuleForm } from './components/TransformationRuleForm'
 import { PreviewPanel } from './components/PreviewPanel'
 import { PDFPreview } from './components/PDFPreview'
+import { PDFEditor, PDFEdit } from './components/PDFEditor'
 import { AuthModal } from './components/AuthModal'
-import { transformPDF, ApiService, TransformResult } from './services/api'
+import { transformPDF, editPDF, ApiService, TransformResult } from './services/api'
 import { useAuth } from './contexts/AuthContext'
 import type { TransformationRule, UploadedFile } from './types'
 import { LogIn, LogOut, User } from 'lucide-react'
@@ -21,6 +22,12 @@ function App() {
   const [isTransforming, setIsTransforming] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [showEditor, setShowEditor] = useState(false)
+  const [editResult, setEditResult] = useState<TransformResult | null>(null)
+  
+  // Upload states
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   // Debug logging
   console.log('🏠 App render - User:', user ? `${user.email} (${user.uid})` : 'Not authenticated');
@@ -43,6 +50,7 @@ function App() {
     setTransformationRules([])
     setTransformResult(null)
     setCurrentStep('upload')
+    setUploadError(null)
   }
 
   const handleTransform = async () => {
@@ -137,6 +145,70 @@ function App() {
     setTransformationRules([])
     setTransformResult(null)
     setShowPreview(false)
+    setShowEditor(false)
+    setUploadError(null)
+    setIsUploading(false)
+  }
+
+  const handleEditPDF = () => {
+    setShowEditor(true)
+  }
+
+  const handleCloseEditor = () => {
+    setShowEditor(false)
+  }
+
+  const handleSaveEdits = async (edits: PDFEdit[]) => {
+    console.log('🔥 handleSaveEdits called with:', edits);
+    
+    if (!uploadedFile) {
+      console.error('❌ No uploaded file found');
+      return;
+    }
+
+    try {
+      console.log('💾 Saving edits to PDF:', edits);
+      
+      // Save edits for downloading the edited PDF directly
+      const result = await editPDF(uploadedFile.fileId, edits);
+      
+      console.log('📤 Edit API result:', result);
+      
+      if (result.success) {
+        console.log('✅ PDF edited successfully!');
+        setEditResult(result);
+        
+        // Also add edits as a transformation rule to preserve them in subsequent transformations
+        const editRule: TransformationRule = {
+          id: `edit_${Date.now()}`,
+          type: 'edit_pdf',
+          edits: edits
+        };
+        
+        // Add edit rule at the beginning so edits are applied first
+        setTransformationRules(prev => [editRule, ...prev]);
+        setShowEditor(false);
+      } else {
+        console.error('❌ Failed to edit PDF:', result.error);
+        alert(`Failed to edit PDF: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('❌ Error editing PDF:', error);
+      alert(`Error editing PDF: ${error}`);
+    }
+  }
+
+  const handleDownloadEditedPDF = () => {
+    if (editResult?.downloadId) {
+      console.log('⬇️ Downloading edited PDF - Download ID:', editResult.downloadId);
+      const downloadUrl = ApiService.getDownloadUrl(editResult.downloadId)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = editResult.fileName || 'edited.pdf'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
   }
 
   const getStepStatus = (step: Step) => {
@@ -241,7 +313,7 @@ function App() {
             <div className="text-center">
               <svg className="animate-spin h-8 w-8 text-primary-600 mx-auto mb-4" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 008-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
               <p className="text-gray-600">Loading...</p>
             </div>
@@ -259,12 +331,35 @@ function App() {
                   onFileUpload={handleFileUpload} 
                   uploadedFile={uploadedFile}
                   onFileRemove={handleFileRemove}
-                  isUploading={false}
-                  uploadError={null}
-                  setIsUploading={() => {}}
-                  setUploadError={() => {}}
+                  isUploading={isUploading}
+                  uploadError={uploadError}
+                  setIsUploading={setIsUploading}
+                  setUploadError={setUploadError}
                 />
               </div>
+
+              {/* Edit PDF Button */}
+              {uploadedFile && currentStep === 'configure' && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                  <div className="text-center">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      Edit Your PDF
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      Add text, images, highlights, and annotations directly to your PDF before applying transformations.
+                    </p>
+                    <button
+                      onClick={handleEditPDF}
+                      className="btn-secondary"
+                    >
+                      <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Open PDF Editor
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Configuration Step */}
               {uploadedFile && (
@@ -391,6 +486,51 @@ function App() {
                   </div>
                 </div>
               )}
+
+              {/* Download Edited PDF */}
+              {editResult && editResult.success && (
+                <div className="bg-green-50 rounded-2xl shadow-sm border border-green-200 p-6">
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      PDF Edited Successfully!
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      Your PDF has been edited and is ready for download. You can also apply additional transformations below.
+                    </p>
+                    <div className="flex justify-center space-x-3">
+                      <button
+                        onClick={handleDownloadEditedPDF}
+                        className="btn-primary"
+                      >
+                        <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Download Edited PDF
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (editResult?.previewId) {
+                            setTransformResult(editResult);
+                            setShowPreview(true);
+                          }
+                        }}
+                        className="btn-secondary"
+                      >
+                        <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        Preview Edited PDF
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Right Column - Preview Panel */}
@@ -482,6 +622,16 @@ function App() {
           fileName={transformResult.fileName}
           onClose={handleClosePreview}
           onDownload={handleDownload}
+        />
+      )}
+
+      {/* PDF Editor Modal */}
+      {showEditor && uploadedFile && (
+        <PDFEditor
+          fileId={uploadedFile.fileId}
+          fileName={uploadedFile.originalName}
+          onSave={handleSaveEdits}
+          onClose={handleCloseEditor}
         />
       )}
     </div>

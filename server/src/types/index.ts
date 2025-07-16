@@ -1,5 +1,5 @@
 export interface TransformationRule {
-  type: 'remove_pages' | 'rotate_pages' | 'add_watermark' | 'merge_pdfs' | 'compress' | 'redact_text' | 'add_page_numbers' | 'rearrange_pages' | 'extract_pages' | 'split_pdf' | 'add_image' | 'add_header_footer' | 'add_blank_pages' | 'crop_pages' | 'add_background' | 'add_text_annotation' | 'add_border' | 'resize_pages' | 'password_protect' | 'remove_password';
+  type: 'remove_pages' | 'rotate_pages' | 'add_watermark' | 'merge_pdfs' | 'compress' | 'redact_text' | 'add_page_numbers' | 'rearrange_pages' | 'extract_pages' | 'split_pdf' | 'add_image' | 'add_header_footer' | 'add_blank_pages' | 'crop_pages' | 'add_background' | 'add_text_annotation' | 'add_border' | 'resize_pages' | 'password_protect' | 'remove_password' | 'edit_pdf';
   pages?: number[];
   angle?: number;
   text?: string;
@@ -101,6 +101,31 @@ export interface TransformationRule {
   currentPassword?: string; // Current password to verify access
   removeUserPassword?: boolean; // Remove user password
   removeOwnerPassword?: boolean; // Remove owner password
+  
+  // PDF editing options
+  edits?: Array<{
+    id: string;
+    type: 'text' | 'image' | 'highlight' | 'note' | 'shape' | 'arrow' | 'redaction';
+    page: number;
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
+    content?: string;
+    style?: {
+      fontSize?: number;
+      fontFamily?: string;
+      color?: string;
+      backgroundColor?: string;
+      borderColor?: string;
+      borderWidth?: number;
+      opacity?: number;
+      bold?: boolean;
+      italic?: boolean;
+      underline?: boolean;
+    };
+    imageData?: string; // base64 image data
+  }>;
 }
 
 export interface TransformRequest {
@@ -123,4 +148,4 @@ export interface TransformationResult {
   resultFileId?: string;
   message?: string;
   error?: string;
-} 
+}

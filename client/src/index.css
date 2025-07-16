@@ -85,7 +85,43 @@
   }
   
   .progress-fill {
-    @apply h-full bg-gradient-to-r from-primary-500 to-primary-400 transition-all duration-300 ease-out;
+    @apply h-full bg-gradient-to-r from-primary-500 to-primary-400 transition-all duration-300 ease-out relative overflow-hidden;
+  }
+  
+  .progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    animation: shimmer 2s infinite;
+  }
+  
+  @keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+  
+  .upload-success {
+    @apply animate-pulse;
+    animation: successPulse 0.6s ease-in-out;
+  }
+  
+  @keyframes successPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+  
+  .upload-stats {
+    @apply transition-all duration-500 ease-out;
+  }
+  
+  .upload-stats-fade-in {
+    @apply animate-fade-in;
+    animation-delay: 0.2s;
   }
   
   .rule-card {

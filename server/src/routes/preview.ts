@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import { uploadedFiles } from './upload'; // Import the uploaded files store
 
 const router = Router();
 
@@ -16,6 +17,38 @@ export const storeTransformedPDF = (fileId: string, pdfBuffer: Buffer): void => 
     transformedFiles.delete(fileId);
   }, 60 * 60 * 1000);
 };
+
+// Get uploaded PDF for preview
+router.get('/upload/:fileId', (req: Request, res: Response) => {
+  try {
+    const { fileId } = req.params;
+    
+    const uploadedFile = uploadedFiles.get(fileId);
+    if (!uploadedFile) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Check if file exists on disk
+    if (!fs.existsSync(uploadedFile.path)) {
+      return res.status(404).json({ error: 'File not found on disk' });
+    }
+
+    // Set headers for PDF viewing
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    // Stream the file
+    const fileStream = fs.createReadStream(uploadedFile.path);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Upload preview error:', error);
+    res.status(500).json({ error: 'Failed to serve upload preview' });
+  }
+});
 
 // Get transformed PDF for preview
 router.get('/:fileId', (req: Request, res: Response) => {
@@ -42,4 +75,4 @@ router.get('/:fileId', (req: Request, res: Response) => {
   }
 });
 
-export default router; 
+export default router;

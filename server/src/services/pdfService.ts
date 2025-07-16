@@ -116,6 +116,9 @@ export class PDFService {
       case 'remove_password':
         await this.removePassword(pdfDoc, rule.currentPassword, rule.removeUserPassword, rule.removeOwnerPassword);
         break;
+      case 'edit_pdf':
+        await this.editPDF(pdfDoc, rule.edits || []);
+        break;
       default:
         throw new Error(`Unsupported transformation type: ${rule.type}`);
     }
@@ -313,8 +316,22 @@ export class PDFService {
   
   private static async extractPages(pdfDoc: PDFDocument, pageRange: { start: number; end: number }): Promise<void> {
     const pageCount = pdfDoc.getPageCount();
-    const startIndex = Math.max(0, pageRange.start - 1);
-    const endIndex = Math.min(pageCount - 1, pageRange.end - 1);
+    
+    // Validate page range
+    if (pageRange.start < 1 || pageRange.end < 1) {
+      throw new Error('Invalid page numbers: Page numbers must be greater than 0');
+    }
+    
+    if (pageRange.start > pageCount || pageRange.end > pageCount) {
+      throw new Error(`Invalid page numbers: Document has ${pageCount} pages, but requested pages ${pageRange.start}-${pageRange.end}`);
+    }
+    
+    if (pageRange.start > pageRange.end) {
+      throw new Error('Invalid page numbers: Start page cannot be greater than end page');
+    }
+    
+    const startIndex = pageRange.start - 1;
+    const endIndex = pageRange.end - 1;
     
     // Create new document with only the specified pages
     const newPdfDoc = await PDFDocument.create();
@@ -1010,6 +1027,156 @@ export class PDFService {
     console.log(`🔒 Password removal already handled before pdf-lib processing`);
   }
 
+  private static async editPDF(pdfDoc: PDFDocument, edits: Array<any>): Promise<void> {
+    console.log(`✏️ Applying ${edits.length} PDF edits`);
+    
+    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    
+    for (const edit of edits) {
+      const pageIndex = edit.page - 1; // Convert to 0-based index
+      
+      if (pageIndex < 0 || pageIndex >= pdfDoc.getPageCount()) {
+        console.warn(`⚠️ Edit page ${edit.page} is out of range, skipping`);
+        continue;
+      }
+      
+      const page = pdfDoc.getPage(pageIndex);
+      const { width, height } = page.getSize();
+      
+      try {
+        switch (edit.type) {
+          case 'text':
+            if (edit.content) {
+              const fontSize = edit.style?.fontSize || 16;
+              const color = this.parseColor(edit.style?.color || '#000000');
+              const font = edit.style?.bold ? helveticaBoldFont : helveticaFont;
+              
+              page.drawText(edit.content, {
+                x: edit.x,
+                y: height - edit.y, // PDF coordinates are bottom-up
+                size: fontSize,
+                font: font,
+                color: color,
+                opacity: edit.style?.opacity || 1
+              });
+            }
+            break;
+            
+          case 'highlight':
+            const highlightColor = this.parseColor(edit.style?.backgroundColor || '#ffff00');
+            page.drawRectangle({
+              x: edit.x,
+              y: height - edit.y - (edit.height || 20), // Adjust for PDF coordinates
+              width: edit.width || 100,
+              height: edit.height || 20,
+              color: highlightColor,
+              opacity: edit.style?.opacity || 0.3
+            });
+            break;
+            
+          case 'note':
+            // Draw note background
+            const noteColor = this.parseColor(edit.style?.backgroundColor || '#ffeb3b');
+            page.drawRectangle({
+              x: edit.x,
+              y: height - edit.y - (edit.height || 100),
+              width: edit.width || 200,
+              height: edit.height || 100,
+              color: noteColor,
+              opacity: edit.style?.opacity || 0.8,
+              borderColor: this.parseColor('#ffc107'),
+              borderWidth: 1
+            });
+            
+            // Draw note text
+            if (edit.content) {
+              const noteFontSize = edit.style?.fontSize || 12;
+              const noteTextColor = this.parseColor(edit.style?.color || '#000000');
+              
+              page.drawText(edit.content, {
+                x: edit.x + 8,
+                y: height - edit.y - 20,
+                size: noteFontSize,
+                font: helveticaFont,
+                color: noteTextColor,
+                maxWidth: (edit.width || 200) - 16
+              });
+            }
+            break;
+            
+          case 'shape':
+            if (edit.content === 'rectangle') {
+              const shapeColor = this.parseColor(edit.style?.borderColor || '#000000');
+              page.drawRectangle({
+                x: edit.x,
+                y: height - edit.y - (edit.height || 50),
+                width: edit.width || 100,
+                height: edit.height || 50,
+                borderColor: shapeColor,
+                borderWidth: edit.style?.borderWidth || 2,
+                color: edit.style?.backgroundColor ? this.parseColor(edit.style.backgroundColor) : undefined,
+                opacity: edit.style?.opacity || 1
+              });
+            }
+            break;
+            
+          case 'redaction':
+            // Draw black rectangle for redaction
+            page.drawRectangle({
+              x: edit.x,
+              y: height - edit.y - (edit.height || 20),
+              width: edit.width || 100,
+              height: edit.height || 20,
+              color: rgb(0, 0, 0),
+              opacity: 1
+            });
+            break;
+            
+          case 'image':
+            if (edit.imageData) {
+              try {
+                // Remove data URL prefix if present
+                const base64Data = edit.imageData.replace(/^data:image\/[a-z]+;base64,/, '');
+                const imageBytes = Buffer.from(base64Data, 'base64');
+                
+                // Determine image type and embed
+                let embeddedImage;
+                if (edit.imageData.includes('data:image/png') || edit.imageData.includes('data:image/jpg') || edit.imageData.includes('data:image/jpeg')) {
+                  if (edit.imageData.includes('data:image/png')) {
+                    embeddedImage = await pdfDoc.embedPng(imageBytes);
+                  } else {
+                    embeddedImage = await pdfDoc.embedJpg(imageBytes);
+                  }
+                  
+                  const imageWidth = edit.width || 200;
+                  const imageHeight = edit.height || 150;
+                  
+                  page.drawImage(embeddedImage, {
+                    x: edit.x,
+                    y: height - edit.y - imageHeight,
+                    width: imageWidth,
+                    height: imageHeight,
+                    opacity: edit.style?.opacity || 1
+                  });
+                }
+              } catch (imageError) {
+                console.error('❌ Failed to embed image:', imageError);
+              }
+            }
+            break;
+            
+          default:
+            console.warn(`⚠️ Unknown edit type: ${edit.type}`);
+        }
+      } catch (editError) {
+        console.error(`❌ Failed to apply edit ${edit.id}:`, editError);
+      }
+    }
+    
+    console.log(`✅ Applied ${edits.length} PDF edits successfully`);
+  }
+
   // Helper method to parse color strings
   private static parseColor(colorString: string): ReturnType<typeof rgb> {
     // Remove # if present
@@ -1022,4 +1189,4 @@ export class PDFService {
     
     return rgb(r, g, b);
   }
-} 
+}

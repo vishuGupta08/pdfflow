@@ -27,6 +27,14 @@ export interface ExtendedApiResponse<T> extends ApiResponse<T> {
   limitInfo?: LimitInfo;
 }
 
+export interface UploadProgress {
+  progress: number;
+  speed: number;
+  timeRemaining: number;
+  loaded: number;
+  total: number;
+}
+
 interface TransformApiResponse {
   success: boolean;
   message: string;
@@ -81,6 +89,46 @@ async function handleApiResponse<T>(response: Response): Promise<ExtendedApiResp
 
 // Use environment variable for API base URL, fallback to localhost for development
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+
+export const editPDF = async (
+  fileId: string,
+  edits: any[]
+): Promise<TransformResult> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/edit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fileId,
+        edits
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        downloadId: data.downloadId,
+        previewId: data.previewId,
+        fileName: data.fileName,
+      };
+    } else {
+      return {
+        success: false,
+        error: data.error || 'Edit failed'
+      };
+    }
+  } catch (error) {
+    console.error('PDF edit error:', error);
+    return {
+      success: false,
+      error: 'Network error occurred'
+    };
+  }
+};
 
 export const transformPDF = async (
   fileId: string,
@@ -142,6 +190,136 @@ export class ApiService {
     return handleApiResponse<UploadedFile>(response);
   }
 
+  static async uploadFileWithProgress(
+    file: File, 
+    onProgress: (progress: UploadProgress) => void,
+    signal?: AbortSignal
+  ): Promise<ExtendedApiResponse<UploadedFile>> {
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append('pdf', file);
+
+      let startTime = Date.now();
+      let lastLoaded = 0;
+      let lastTime = startTime;
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const now = Date.now();
+          const timeDiff = (now - lastTime) / 1000; // Convert to seconds
+          const loadedDiff = event.loaded - lastLoaded;
+          
+          // Calculate speed (bytes per second)
+          const speed = timeDiff > 0 ? loadedDiff / timeDiff : 0;
+          
+          // Calculate time remaining
+          const remainingBytes = event.total - event.loaded;
+          const timeRemaining = speed > 0 ? remainingBytes / speed : 0;
+          
+          const progress: UploadProgress = {
+            progress: (event.loaded / event.total) * 100,
+            speed: speed,
+            timeRemaining: timeRemaining,
+            loaded: event.loaded,
+            total: event.total
+          };
+          
+          onProgress(progress);
+          
+          // Update for next calculation
+          lastLoaded = event.loaded;
+          lastTime = now;
+        }
+      });
+
+      xhr.addEventListener('load', async () => {
+        try {
+          const responseText = xhr.responseText;
+          const data = JSON.parse(responseText);
+          
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve({
+              success: true,
+              data: data.data,
+            });
+          } else {
+            // Handle error response
+            let errorType = 'UNKNOWN';
+            let limitInfo: LimitInfo | undefined = undefined;
+            
+            switch (xhr.status) {
+              case 413:
+                errorType = 'FILE_SIZE_LIMIT';
+                break;
+              case 429:
+                errorType = 'USAGE_LIMIT';
+                limitInfo = {
+                  upgrade_required: data.upgrade_required,
+                  current_plan: data.current_plan,
+                  usage: data.usage
+                };
+                break;
+              case 401:
+              case 403:
+                errorType = 'AUTH_REQUIRED';
+                break;
+              case 400:
+                if (data.error && data.error.toLowerCase().includes('file') && data.error.toLowerCase().includes('size')) {
+                  errorType = 'FILE_SIZE_LIMIT';
+                }
+                break;
+            }
+            
+            resolve({
+              success: false,
+              error: data.error || `HTTP ${xhr.status}: ${xhr.statusText}`,
+              errorType,
+              limitInfo
+            });
+          }
+        } catch (error) {
+          resolve({
+            success: false,
+            error: 'Invalid response from server'
+          });
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        resolve({
+          success: false,
+          error: 'Network error occurred'
+        });
+      });
+
+      xhr.addEventListener('timeout', () => {
+        resolve({
+          success: false,
+          error: 'Upload timeout'
+        });
+      });
+
+      xhr.addEventListener('abort', () => {
+        resolve({
+          success: false,
+          error: 'Upload cancelled'
+        });
+      });
+
+      // Handle abort signal
+      if (signal) {
+        signal.addEventListener('abort', () => {
+          xhr.abort();
+        });
+      }
+
+      xhr.open('POST', `${API_BASE_URL}/upload`);
+      xhr.timeout = 5 * 60 * 1000; // 5 minutes timeout
+      xhr.send(formData);
+    });
+  }
+
   static async getTransformationStatus(resultId: string): Promise<ApiResponse<{ resultId: string; ready: boolean; originalName: string }>> {
     const response = await fetch(`${API_BASE_URL}/transform/${resultId}`);
     return await response.json();
@@ -160,4 +338,4 @@ export class ApiService {
     link.click();
     document.body.removeChild(link);
   }
-} 
+}
