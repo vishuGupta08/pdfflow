@@ -24,6 +24,7 @@ function App() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showEditor, setShowEditor] = useState(false)
   const [editResult, setEditResult] = useState<TransformResult | null>(null)
+  const [showRefreshConfirm, setShowRefreshConfirm] = useState(false)
   
   // Upload states
   const [isUploading, setIsUploading] = useState(false)
@@ -38,6 +39,38 @@ function App() {
     console.log('📊 Current transform result:', transformResult);
     console.log('✅ Transform success:', transformResult.success);
     console.log('🎯 Should show buttons:', transformResult.success);
+  }
+
+  // Check if there's active work (uploaded file, transformations, or ongoing processes)
+  const hasActiveWork = () => {
+    return uploadedFile || 
+           transformationRules.length > 0 || 
+           isTransforming || 
+           isUploading || 
+           transformResult ||
+           showEditor ||
+           editResult;
+  }
+
+  // Handle PDFFlow logo/title click
+  const handleLogoClick = () => {
+    if (hasActiveWork()) {
+      setShowRefreshConfirm(true);
+    } else {
+      // No active work, just refresh
+      window.location.reload();
+    }
+  }
+
+  // Handle confirmed refresh
+  const handleConfirmRefresh = () => {
+    setShowRefreshConfirm(false);
+    window.location.reload();
+  }
+
+  // Handle cancel refresh
+  const handleCancelRefresh = () => {
+    setShowRefreshConfirm(false);
   }
 
   const handleFileUpload = (file: UploadedFile) => {
@@ -232,12 +265,15 @@ function App() {
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-3">
+            <button 
+              onClick={handleLogoClick}
+              className="flex items-center space-x-3 hover:opacity-80 transition-opacity cursor-pointer"
+            >
               <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">PDF</span>
               </div>
               <h1 className="text-xl font-bold text-gray-900">PDFFlow</h1>
-            </div>
+            </button>
             
             {/* Right side - Auth/User info */}
             <div className="flex items-center space-x-4">
@@ -633,6 +669,78 @@ function App() {
           onSave={handleSaveEdits}
           onClose={handleCloseEditor}
         />
+      )}
+
+      {/* Refresh Confirmation Modal */}
+      {showRefreshConfirm && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Refresh Page?</h3>
+              
+              <p className="text-gray-600 mb-6">
+                You have an uploaded file or active transformation in progress. 
+                Refreshing the page will reset your current work and you'll lose:
+              </p>
+              
+              <div className="text-left bg-gray-50 rounded-lg p-4 mb-6">
+                <ul className="space-y-2 text-sm text-gray-700">
+                  {uploadedFile && (
+                    <li className="flex items-center space-x-2">
+                      <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                      <span>Uploaded file: {uploadedFile.originalName}</span>
+                    </li>
+                  )}
+                  {transformationRules.length > 0 && (
+                    <li className="flex items-center space-x-2">
+                      <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                      <span>{transformationRules.length} transformation{transformationRules.length > 1 ? 's' : ''} configured</span>
+                    </li>
+                  )}
+                  {(isTransforming || isUploading) && (
+                    <li className="flex items-center space-x-2">
+                      <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                      <span>Process in progress</span>
+                    </li>
+                  )}
+                  {transformResult && (
+                    <li className="flex items-center space-x-2">
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      <span>Transformation results</span>
+                    </li>
+                  )}
+                  {editResult && (
+                    <li className="flex items-center space-x-2">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                      <span>PDF editing results</span>
+                    </li>
+                  )}
+                </ul>
+              </div>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleCancelRefresh}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmRefresh}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                >
+                  Refresh Anyway
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
