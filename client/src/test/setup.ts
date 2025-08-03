@@ -64,6 +64,18 @@ Object.defineProperty(import.meta, 'env', {
 
 // Mock XMLHttpRequest for upload progress
 global.XMLHttpRequest = class MockXMLHttpRequest {
+  static readonly UNSENT = 0
+  static readonly OPENED = 1
+  static readonly HEADERS_RECEIVED = 2
+  static readonly LOADING = 3
+  static readonly DONE = 4
+
+  readonly UNSENT = 0
+  readonly OPENED = 1
+  readonly HEADERS_RECEIVED = 2
+  readonly LOADING = 3
+  readonly DONE = 4
+
   upload = {
     addEventListener: vi.fn(),
   }
@@ -74,4 +86,23 @@ global.XMLHttpRequest = class MockXMLHttpRequest {
   status = 200
   timeout = 0
   abort = vi.fn()
-} 
+  readyState = 0
+  response = null
+  responseType = '' as XMLHttpRequestResponseType
+  setRequestHeader = vi.fn()
+  getResponseHeader = vi.fn()
+  getAllResponseHeaders = vi.fn()
+  overrideMimeType = vi.fn()
+  onreadystatechange = null
+  ontimeout = null
+  onerror = null
+  onload = null
+  onloadstart = null
+  onloadend = null
+  onabort = null
+  onprogress = null
+  withCredentials = false
+  statusText = ''
+  responseURL = ''
+  responseXML = null
+} as any as typeof XMLHttpRequest 

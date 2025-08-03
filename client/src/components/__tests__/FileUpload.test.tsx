@@ -7,6 +7,11 @@ import { ApiService } from '../../services/api'
 // Mock the ApiService
 vi.mock('../../services/api')
 
+// Mock react-dropzone
+vi.mock('react-dropzone', () => ({
+  useDropzone: vi.fn(),
+}))
+
 describe('FileUpload Component', () => {
   const mockOnFileUpload = vi.fn()
   const mockOnFileRemove = vi.fn()
@@ -25,6 +30,14 @@ describe('FileUpload Component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    
+    // Setup default mock for useDropzone
+    const { useDropzone } = require('react-dropzone')
+    vi.mocked(useDropzone).mockReturnValue({
+      getRootProps: vi.fn(() => ({})),
+      getInputProps: vi.fn(() => ({})),
+      isDragActive: false,
+    })
   })
 
   it('renders upload zone when no file is uploaded', () => {
@@ -91,7 +104,7 @@ describe('FileUpload Component', () => {
     const removeButton = screen.getByTitle('Remove file')
     await user.click(removeButton)
     
-    expect(mockOnFileRemove).toHaveBeenCalledOnce()
+    expect(mockOnFileRemove).toHaveBeenCalledTimes(1)
   })
 
   it('handles successful file upload', async () => {
@@ -105,21 +118,28 @@ describe('FileUpload Component', () => {
       },
     }
 
-    const mockProgress = vi.fn()
     vi.mocked(ApiService.uploadFileWithProgress).mockResolvedValue(mockUploadResponse)
+
+    // Mock useDropzone to return our test handlers
+    const { useDropzone } = require('react-dropzone')
+    const mockOnDrop = vi.fn()
+    vi.mocked(useDropzone).mockReturnValue({
+      getRootProps: vi.fn(() => ({})),
+      getInputProps: vi.fn(() => ({})),
+      isDragActive: false,
+      onDrop: mockOnDrop,
+    })
 
     render(<FileUpload {...defaultProps} />)
     
     // Create a test file
     const file = new File(['test content'], 'test.pdf', { type: 'application/pdf' })
     
-    // Mock the useDropzone hook
-    const { useDropzone } = await import('react-dropzone')
-    const mockUseDropzone = vi.mocked(useDropzone)
-    
-    // Simulate file drop
-    const onDrop = mockUseDropzone.mock.calls[0][0].onDrop
-    await onDrop([file])
+    // Simulate file drop by calling the mocked onDrop
+    const dropzoneConfig = vi.mocked(useDropzone).mock.calls[0]?.[0]
+    if (dropzoneConfig?.onDrop) {
+      await dropzoneConfig.onDrop([file], [], new Event('drop') as any)
+    }
     
     await waitFor(() => {
       expect(mockSetIsUploading).toHaveBeenCalledWith(true)
@@ -144,11 +164,12 @@ describe('FileUpload Component', () => {
     
     const file = new File(['test content'], 'test.pdf', { type: 'application/pdf' })
     
-    const { useDropzone } = await import('react-dropzone')
-    const mockUseDropzone = vi.mocked(useDropzone)
-    
-    const onDrop = mockUseDropzone.mock.calls[0][0].onDrop
-    await onDrop([file])
+    // Simulate file drop by calling the mocked onDrop
+    const { useDropzone } = require('react-dropzone')
+    const dropzoneConfig = vi.mocked(useDropzone).mock.calls[0]?.[0]
+    if (dropzoneConfig?.onDrop) {
+      await dropzoneConfig.onDrop([file], [], new Event('drop') as any)
+    }
     
     await waitFor(() => {
       expect(mockSetUploadError).toHaveBeenCalledWith('Upload failed')
