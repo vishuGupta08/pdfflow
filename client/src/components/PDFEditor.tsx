@@ -107,7 +107,25 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({
   const pageRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const pdfUrl = `${API_BASE_URL}/upload/preview/${fileId}`;
+    const pdfUrl = `${API_BASE_URL.replace('/api', '')}/api/preview/${fileId}`;
+  
+  const truncateFileName = (fileName: string, maxLength: number = 35): string => {
+    if (fileName.length <= maxLength) return fileName;
+    
+    // Extract file extension
+    const lastDotIndex = fileName.lastIndexOf('.');
+    const extension = lastDotIndex !== -1 ? fileName.substring(lastDotIndex) : '';
+    const nameWithoutExt = lastDotIndex !== -1 ? fileName.substring(0, lastDotIndex) : fileName;
+    
+    // Calculate how much space we have for the name part
+    const availableLength = maxLength - extension.length - 3; // 3 for "..."
+    
+    if (availableLength <= 0) {
+      return fileName.substring(0, maxLength - 3) + '...';
+    }
+    
+    return nameWithoutExt.substring(0, availableLength) + '...' + extension;
+  };
 
   console.log('🔍 PDFEditor - fileId:', fileId);
   console.log('🔍 PDFEditor - pdfUrl:', pdfUrl);
@@ -457,7 +475,9 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({
           <div className="flex items-center space-x-4">
             <h2 className="text-lg font-semibold text-gray-900">PDF Editor</h2>
             {fileName && (
-              <span className="text-sm text-gray-500">{fileName}</span>
+              <span className="text-sm text-gray-500" title={fileName}>
+                {truncateFileName(fileName)}
+              </span>
             )}
           </div>
           <div className="flex items-center space-x-2">
@@ -712,6 +732,8 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({
                             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                           </div>
                         }
+                        renderTextLayer={false}
+                        renderAnnotationLayer={false}
                       />
                       {/* Render all edits for current page */}
                       {edits.map(renderEditOverlay)}

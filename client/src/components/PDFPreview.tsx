@@ -60,6 +60,24 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
     setRotation(prev => (prev + 90) % 360);
   };
 
+  const truncateFileName = (fileName: string, maxLength: number = 40): string => {
+    if (fileName.length <= maxLength) return fileName;
+    
+    // Extract file extension
+    const lastDotIndex = fileName.lastIndexOf('.');
+    const extension = lastDotIndex !== -1 ? fileName.substring(lastDotIndex) : '';
+    const nameWithoutExt = lastDotIndex !== -1 ? fileName.substring(0, lastDotIndex) : fileName;
+    
+    // Calculate how much space we have for the name part
+    const availableLength = maxLength - extension.length - 3; // 3 for "..."
+    
+    if (availableLength <= 0) {
+      return fileName.substring(0, maxLength - 3) + '...';
+    }
+    
+    return nameWithoutExt.substring(0, availableLength) + '...' + extension;
+  };
+
   console.log('PDFPreview rendering with fileId:', fileId, 'pdfUrl:', pdfUrl);
 
   return (
@@ -70,7 +88,9 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
           <div>
             <h2 className="text-xl font-semibold text-gray-900">PDF Preview</h2>
             {fileName && (
-              <p className="text-sm text-gray-500 mt-1">{fileName}</p>
+              <p className="text-sm text-gray-500 mt-1" title={fileName}>
+                {truncateFileName(fileName)}
+              </p>
             )}
           </div>
           <div className="flex items-center space-x-2">
@@ -179,6 +199,8 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
                     </div>
                   }
                   className="shadow-lg"
+                  renderTextLayer={false}
+                  renderAnnotationLayer={false}
                 />
               </Document>
             )}

@@ -16,6 +16,24 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, upl
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const truncateFileName = (fileName: string, maxLength: number = 35): string => {
+    if (fileName.length <= maxLength) return fileName;
+    
+    // Extract file extension
+    const lastDotIndex = fileName.lastIndexOf('.');
+    const extension = lastDotIndex !== -1 ? fileName.substring(lastDotIndex) : '';
+    const nameWithoutExt = lastDotIndex !== -1 ? fileName.substring(0, lastDotIndex) : fileName;
+    
+    // Calculate how much space we have for the name part
+    const availableLength = maxLength - extension.length - 3; // 3 for "..."
+    
+    if (availableLength <= 0) {
+      return fileName.substring(0, maxLength - 3) + '...';
+    }
+    
+    return nameWithoutExt.substring(0, availableLength) + '...' + extension;
+  };
+
   const getCompressionEstimate = (originalSize: number, level: string): { size: number; reduction: number } => {
     const reductionRates = {
       low: 0.10,      // 10% reduction (minimal compression, best quality)
@@ -246,7 +264,9 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, upl
               <FileText className="h-5 w-5 text-primary-600" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-primary-900 text-sm">{fileName}</h3>
+              <h3 className="font-semibold text-primary-900 text-sm" title={fileName}>
+                {truncateFileName(fileName)}
+              </h3>
               <div className="flex items-center space-x-2 mt-1">
                 <CheckCircle className="h-3 w-3 text-success-500" />
                 <span className="text-xs text-primary-700">

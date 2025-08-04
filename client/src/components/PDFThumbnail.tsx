@@ -22,6 +22,24 @@ export const PDFThumbnail: React.FC<PDFThumbnailProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const truncateFileName = (fileName: string, maxLength: number = 25): string => {
+    if (fileName.length <= maxLength) return fileName;
+    
+    // Extract file extension
+    const lastDotIndex = fileName.lastIndexOf('.');
+    const extension = lastDotIndex !== -1 ? fileName.substring(lastDotIndex) : '';
+    const nameWithoutExt = lastDotIndex !== -1 ? fileName.substring(0, lastDotIndex) : fileName;
+    
+    // Calculate how much space we have for the name part
+    const availableLength = maxLength - extension.length - 3; // 3 for "..."
+    
+    if (availableLength <= 0) {
+      return fileName.substring(0, maxLength - 3) + '...';
+    }
+    
+    return nameWithoutExt.substring(0, availableLength) + '...' + extension;
+  };
+
   // For uploaded files, we need to construct the correct preview URL
   // The server has an upload endpoint that serves uploaded files for preview
   const pdfUrl = `${API_BASE_URL}/upload/preview/${fileId}`;
@@ -98,8 +116,8 @@ export const PDFThumbnail: React.FC<PDFThumbnailProps> = ({
         <div className="px-3 py-2 bg-gray-50 border-t border-gray-200">
           <div className="flex items-center space-x-2">
             <FileText className="h-3 w-3 text-gray-400" />
-            <span className="text-xs text-gray-600 truncate" title={fileName}>
-              {fileName}
+            <span className="text-xs text-gray-600" title={fileName}>
+              {truncateFileName(fileName)}
             </span>
           </div>
         </div>
