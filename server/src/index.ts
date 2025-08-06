@@ -31,6 +31,8 @@ app.use(morgan('combined'));
 const allowedOrigins = process.env.NODE_ENV === 'production' 
   ? [
       process.env.FRONTEND_URL,
+      'https://pdfclinic.org',
+      'https://www.pdfclinic.org',
       'https://pdfflow.vercel.app',
       'https://pdfflow-*.vercel.app',
       // Add your actual Vercel URL here temporarily
