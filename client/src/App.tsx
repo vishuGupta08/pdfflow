@@ -5,10 +5,12 @@ import { PreviewPanel } from './components/PreviewPanel'
 import { PDFPreview } from './components/PDFPreview'
 import { PDFEditor, PDFEdit } from './components/PDFEditor'
 import { AuthModal } from './components/AuthModal'
+import FeedbackModal from './components/FeedbackModal'
+import FloatingFeedbackButton from './components/FloatingFeedbackButton'
 import { transformPDF, editPDF, ApiService, TransformResult } from './services/api'
 import { useAuth } from './contexts/AuthContext'
 import type { TransformationRule, UploadedFile } from './types'
-import { LogIn, LogOut, User } from 'lucide-react'
+import { LogIn, LogOut, User, MessageSquare } from 'lucide-react'
 import './App.css'
 
 type Step = 'upload' | 'configure' | 'preview' | 'download' | 'complete'
@@ -25,6 +27,7 @@ function App() {
   const [showEditor, setShowEditor] = useState(false)
   const [editResult, setEditResult] = useState<TransformResult | null>(null)
   const [showRefreshConfirm, setShowRefreshConfirm] = useState(false)
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   
   // Upload states
   const [isUploading, setIsUploading] = useState(false)
@@ -260,81 +263,94 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-primary-50">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-teal-100 animate-gradient">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-sm border-b border-gray-200">
+      <header className="sticky top-0 z-40 glass border-b border-white/20 animate-fade-in-down">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-16 gap-4">
             <button 
               onClick={handleLogoClick}
-              className="flex items-center space-x-3 hover:opacity-80 transition-opacity cursor-pointer"
+              className="flex items-center space-x-3 hover-scale transition-all duration-300 cursor-pointer group flex-shrink-0"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg group-hover:shadow-xl animate-float">
                 <span className="text-white font-bold text-sm">PDF</span>
               </div>
-              <h1 className="text-xl font-bold text-gray-900">PDFFlow</h1>
+              <h1 className="text-xl font-bold text-gradient-primary whitespace-nowrap">PDF Clinic</h1>
             </button>
             
+            {/* Progress Steps - Center positioned when authenticated */}
+            {user && (
+              <div className="hidden lg:flex items-center space-x-6 flex-1 justify-center max-w-md">
+                {(['upload', 'configure', 'preview', 'download'] as Step[]).map((step, index) => {
+                  const status = getStepStatus(step)
+                  return (
+                    <div key={step} className="flex items-center">
+                      <div className={`flex items-center space-x-2 ${
+                        status === 'current' ? 'text-primary-600' :
+                        status === 'completed' ? 'text-success-600' :
+                        'text-gray-400'
+                      }`}>
+                        <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-medium flex-shrink-0 ${
+                          status === 'current' ? 'border-primary-600 bg-primary-50' :
+                          status === 'completed' ? 'border-success-600 bg-success-50' :
+                          'border-gray-300 bg-white'
+                        }`}>
+                          {status === 'completed' ? '✓' : index + 1}
+                        </div>
+                        <span className="text-sm font-medium capitalize whitespace-nowrap">{step}</span>
+                      </div>
+                      {index < 3 && (
+                        <div className={`w-8 h-0.5 ml-3 flex-shrink-0 ${
+                          status === 'completed' ? 'bg-success-300' : 'bg-gray-200'
+                        }`} />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            
             {/* Right side - Auth/User info */}
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3 flex-shrink-0">
+              {/* Feedback Button - Always visible */}
+              <button
+                onClick={() => setShowFeedbackModal(true)}
+                className="inline-flex items-center space-x-2 px-3 py-2 glass-dark hover:glass-strong rounded-xl transition-all duration-300 group hover-lift border border-white/20 hover:border-indigo-300"
+                title="Share your feedback"
+              >
+                <div className="relative">
+                  <MessageSquare className="h-4 w-4 text-gray-600 group-hover:text-indigo-600 transition-colors duration-300" />
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full animate-pulse opacity-80"></div>
+                </div>
+                <span className="text-sm font-medium text-gray-600 group-hover:text-indigo-600 transition-colors duration-300 hidden sm:inline">Feedback</span>
+              </button>
+              
               {user ? (
                 <div className="flex items-center space-x-3">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                      <User className="h-4 w-4 text-primary-600" />
+                  <div className="flex items-center space-x-2 glass-dark px-3 py-2 rounded-xl border border-white/20">
+                    <div className="w-8 h-8 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center animate-pulse-glow border border-indigo-200">
+                      <User className="h-4 w-4 text-indigo-600" />
                     </div>
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-medium text-gray-700 hidden sm:inline">
                       {user.email?.split('@')[0]}
                     </span>
                   </div>
                   <button
                     onClick={signOut}
-                    className="inline-flex items-center space-x-1 text-sm text-gray-600 hover:text-gray-900"
+                    className="btn-ghost hover-lift flex items-center space-x-1"
                   >
                     <LogOut className="h-4 w-4" />
-                    <span>Sign out</span>
+                    <span className="hidden sm:inline">Sign out</span>
                   </button>
                 </div>
               ) : (
                 <button
                   onClick={() => setShowAuthModal(true)}
-                  className="inline-flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                  className="btn-primary hover-glow flex items-center space-x-2"
                 >
                   <LogIn className="h-4 w-4" />
-                  <span>Sign In</span>
+                  <span className="hidden sm:inline">Sign In</span>
                 </button>
-              )}
-              
-              {/* Progress Steps - only show when authenticated */}
-              {user && (
-                <div className="hidden md:flex items-center space-x-8 ml-8">
-                  {(['upload', 'configure', 'preview', 'download'] as Step[]).map((step, index) => {
-                    const status = getStepStatus(step)
-                    return (
-                      <div key={step} className="flex items-center">
-                        <div className={`flex items-center space-x-2 ${
-                          status === 'current' ? 'text-primary-600' :
-                          status === 'completed' ? 'text-success-600' :
-                          'text-gray-400'
-                        }`}>
-                          <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-medium ${
-                            status === 'current' ? 'border-primary-600 bg-primary-50' :
-                            status === 'completed' ? 'border-success-600 bg-success-50' :
-                            'border-gray-300 bg-white'
-                          }`}>
-                            {status === 'completed' ? '✓' : index + 1}
-                          </div>
-                          <span className="text-sm font-medium capitalize">{step}</span>
-                        </div>
-                        {index < 3 && (
-                          <div className={`w-12 h-0.5 ml-4 ${
-                            status === 'completed' ? 'bg-success-300' : 'bg-gray-200'
-                          }`} />
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
               )}
             </div>
           </div>
@@ -376,22 +392,27 @@ function App() {
 
               {/* Edit PDF Button */}
               {uploadedFile && currentStep === 'configure' && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div className="card card-hover animate-fade-in-up p-6">
                   <div className="text-center">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-float border border-purple-200">
+                      <svg className="h-8 w-8 text-gradient-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-bold text-gradient-primary mb-3">
                       Edit Your PDF
                     </h3>
-                    <p className="text-gray-600 mb-4">
+                    <p className="text-gray-600 mb-6 leading-relaxed">
                       Add text, images, highlights, and annotations directly to your PDF before applying transformations.
                     </p>
                     <button
                       onClick={handleEditPDF}
-                      className="btn-secondary"
+                      className="btn-secondary hover-glow inline-flex items-center space-x-2"
                     >
-                      <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
-                      Open PDF Editor
+                      <span>Open PDF Editor</span>
                     </button>
                   </div>
                 </div>
@@ -412,37 +433,36 @@ function App() {
 
               {/* Transform Button */}
               {uploadedFile && transformationRules.length > 0 && currentStep === 'configure' && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div className="card card-hover animate-scale-in p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
                   <div className="text-center">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    <div className="w-20 h-20 bg-gradient-to-br from-green-100 to-emerald-100 rounded-3xl flex items-center justify-center mx-auto mb-6 animate-pulse-glow border-2 border-green-200">
+                      <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-2xl font-bold text-gradient-primary mb-3">
                       Ready to Transform
                     </h3>
-                    <p className="text-gray-600 mb-6">
-                      {transformationRules.length} transformation{transformationRules.length !== 1 ? 's' : ''} will be applied to your PDF
+                    <p className="text-gray-600 mb-8 text-lg">
+                      <span className="font-semibold text-green-600">{transformationRules.length}</span> transformation{transformationRules.length !== 1 ? 's' : ''} will be applied to your PDF
                     </p>
                     
-                    <button
-                      onClick={handleTransform}
-                      disabled={isTransforming}
-                      className="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
-                    >
-                      {isTransforming ? (
+                                          {isTransforming ? (
                         <>
-                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
-                          Processing...
+                          <span>Processing Magic...</span>
                         </>
                       ) : (
                         <>
-                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                           </svg>
-                          Transform PDF
+                          <span>Transform PDF</span>
                         </>
                       )}
-                    </button>
                   </div>
                 </div>
               )}
@@ -452,25 +472,25 @@ function App() {
                 <div className={`transition-all duration-300 ${
                   currentStep === 'preview' ? 'opacity-100' : 'opacity-60'
                 }`}>
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                  <div className="card card-hover animate-scale-in p-6">
                     <div className="text-center">
-                      <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                        transformResult.success ? 'bg-success-100' : 'bg-error-100'
+                      <div className={`w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 animate-pulse-glow border-2 ${
+                        transformResult.success ? 'bg-gradient-to-br from-green-100 to-emerald-100 border-green-200' : 'bg-gradient-to-br from-red-100 to-pink-100 border-red-200'
                       }`}>
                         {transformResult.success ? (
-                          <svg className="w-8 h-8 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
                         ) : (
-                          <svg className="w-8 h-8 text-error-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         )}
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      <h3 className="text-2xl font-bold text-gradient-primary mb-3">
                         {transformResult.success ? 'Transformation Complete!' : 'Transformation Failed'}
                       </h3>
-                      <p className="text-gray-600 mb-6">
+                      <p className="text-gray-600 mb-8 text-lg">
                         {transformResult.error}
                       </p>
                       
@@ -489,25 +509,25 @@ function App() {
                       )}
                       
                       {transformResult.success && (
-                        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
                           <button
                             onClick={handlePreview}
-                            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                            className="btn-secondary hover-glow inline-flex items-center space-x-2"
                           >
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
-                            Preview PDF
+                            <span>Preview PDF</span>
                           </button>
                           <button
                             onClick={handleDownload}
-                            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
+                            className="btn-primary hover-glow inline-flex items-center space-x-2"
                           >
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
-                            Download PDF
+                            <span>Download PDF</span>
                           </button>
                         </div>
                       )}
@@ -525,28 +545,28 @@ function App() {
 
               {/* Download Edited PDF */}
               {editResult && editResult.success && (
-                <div className="bg-green-50 rounded-2xl shadow-sm border border-green-200 p-6">
+                <div className="card card-hover animate-scale-in p-6 bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200">
                   <div className="text-center">
-                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="w-20 h-20 bg-gradient-to-br from-emerald-100 to-green-100 rounded-3xl flex items-center justify-center mx-auto mb-6 animate-pulse-glow border-2 border-emerald-200">
+                      <svg className="h-10 w-10 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    <h3 className="text-2xl font-bold text-gradient-primary mb-3">
                       PDF Edited Successfully!
                     </h3>
-                    <p className="text-gray-600 mb-4">
+                    <p className="text-gray-600 mb-8 text-lg leading-relaxed">
                       Your PDF has been edited and is ready for download. You can also apply additional transformations below.
                     </p>
-                    <div className="flex justify-center space-x-3">
+                    <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
                       <button
                         onClick={handleDownloadEditedPDF}
-                        className="btn-primary"
+                        className="btn-primary hover-glow inline-flex items-center space-x-2"
                       >
-                        <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        Download Edited PDF
+                        <span>Download Edited PDF</span>
                       </button>
                       <button
                         onClick={() => {
@@ -555,13 +575,13 @@ function App() {
                             setShowPreview(true);
                           }
                         }}
-                        className="btn-secondary"
+                        className="btn-secondary hover-glow inline-flex items-center space-x-2"
                       >
-                        <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
-                        Preview Edited PDF
+                        <span>Preview Edited PDF</span>
                       </button>
                     </div>
                   </div>
@@ -742,6 +762,17 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+      />
+
+      {/* Floating Feedback Button */}
+      <FloatingFeedbackButton
+        onClick={() => setShowFeedbackModal(true)}
+      />
     </div>
   )
 }

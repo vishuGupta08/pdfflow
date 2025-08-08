@@ -1,5 +1,5 @@
 {
-  "name": "pdfflow-frontend",
+  "name": "pdf-clinic-frontend",
   "version": 2,
   "buildCommand": "cd client && npm install && npm run build",
   "outputDirectory": "client/dist",

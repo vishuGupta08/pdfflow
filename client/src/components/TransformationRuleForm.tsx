@@ -1762,33 +1762,59 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
   };
 
   return (
-    <div className="card">
-      <div className="section-header">
-        <div className="flex items-center space-x-3">
-          <Settings className="h-6 w-6 text-primary-600" />
-          <div>
-            <h2 className="section-title">Transformation Rules</h2>
-            <p className="section-subtitle">Configure how you want to transform your PDF</p>
+    <div className="glass-strong animate-fade-in-up">
+      <div className="relative overflow-hidden rounded-t-xl">
+        {/* Gradient Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 via-blue-600/20 to-indigo-600/20" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent" />
+        
+        {/* Header Content */}
+        <div className="relative p-6 z-10">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center space-x-4 min-w-0 flex-1">
+              <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/30 shadow-lg flex-shrink-0">
+                <Settings className="h-6 w-6 text-indigo-700" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl font-bold text-gray-800 mb-1 truncate">
+                  Transformation Rules
+                </h2>
+                <p className="text-gray-700 text-sm font-medium line-clamp-2">
+                  Configure how you want to transform your PDF
+                </p>
+              </div>
+            </div>
+            <div className="flex-shrink-0">
+              <button
+                onClick={addRule}
+                className="btn-primary group relative overflow-hidden whitespace-nowrap"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="relative flex items-center">
+                  <Plus className="h-4 w-4 mr-2 transition-transform group-hover:rotate-90 duration-300" />
+                  <span>Add Rule</span>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
-        <button
-          onClick={addRule}
-          className="btn-primary"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Rule
-        </button>
+        
+        {/* Decorative elements */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/10 to-transparent rounded-full transform translate-x-16 -translate-y-16" />
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-white/5 to-transparent rounded-full transform -translate-x-12 translate-y-12" />
       </div>
 
       {/* Enhanced Category-based Transformation Selector */}
       {rules.length === 0 ? (
-        <div className="space-y-6">
+        <div className="p-6 space-y-8">
           <div className="text-center py-8">
-            <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Settings className="h-8 w-8 text-gray-400" />
+            <div className="w-20 h-20 glass-strong rounded-2xl flex items-center justify-center mx-auto mb-6 group hover-lift cursor-pointer">
+              <Settings className="h-10 w-10 text-indigo-600 group-hover:text-purple-600 transition-colors duration-300" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Start with a transformation</h3>
-            <p className="text-gray-600 mb-6">Choose from our comprehensive set of PDF transformation tools</p>
+            <h3 className="text-xl font-bold text-gray-900 mb-3">Start with a transformation</h3>
+            <p className="text-gray-600 max-w-md mx-auto">
+              Choose from our comprehensive set of PDF transformation tools to get started
+            </p>
           </div>
 
           {/* Category Grid */}
@@ -1796,15 +1822,28 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
             {['Page Operations', 'Document Management', 'Content & Annotations', 'Security & Privacy'].map((category) => {
               const categoryTypes = transformationTypes.filter(type => type.category === category);
               
+              const categoryIcons: Record<string, string> = {
+                'Page Operations': '📄',
+                'Document Management': '📁', 
+                'Content & Annotations': '✨',
+                'Security & Privacy': '🔒'
+              };
+              
               return (
-                <div key={category} className="space-y-4">
-                  <div className="flex items-center space-x-2">
-                    <div className="h-px bg-gradient-to-r from-primary-200 to-transparent flex-1" />
-                    <h3 className="font-semibold text-gray-900 px-3">{category}</h3>
-                    <div className="h-px bg-gradient-to-l from-primary-200 to-transparent flex-1" />
+                <div key={category} className="space-y-4 animate-fade-in-up">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 rounded-xl" />
+                    <div className="relative glass p-4 rounded-xl border border-white/20">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-2xl">{categoryIcons[category]}</span>
+                        <div className="h-px bg-gradient-to-r from-indigo-200 via-purple-200 to-pink-200 flex-1" />
+                        <h3 className="font-bold text-gray-900 px-4 text-lg">{category}</h3>
+                        <div className="h-px bg-gradient-to-l from-pink-200 via-purple-200 to-indigo-200 flex-1" />
+                      </div>
+                    </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {categoryTypes.map((type) => {
                       const IconComponent = type.icon;
                       
@@ -1812,21 +1851,27 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                         <button
                           key={type.value}
                           onClick={() => addRuleWithType(type.value)}
-                          className="group p-4 bg-white border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-primary-50 transition-all duration-200 text-left focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                          className="group relative overflow-hidden glass-strong p-6 rounded-xl hover-lift transition-all duration-300 text-left focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:ring-offset-2 hover:shadow-xl hover:shadow-purple-500/25"
                         >
-                          <div className="flex items-start space-x-3">
-                            <div className="p-2 bg-gray-100 group-hover:bg-primary-100 rounded-lg transition-colors duration-200">
-                              <IconComponent className="h-5 w-5 text-gray-600 group-hover:text-primary-600" />
+                          {/* Gradient background on hover */}
+                          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                          
+                          <div className="relative flex items-start space-x-4">
+                            <div className="p-3 glass rounded-xl border border-white/30 group-hover:border-purple-300/50 transition-all duration-300 group-hover:shadow-lg">
+                              <IconComponent className="h-6 w-6 text-indigo-600 group-hover:text-purple-600 transition-colors duration-300" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-medium text-gray-900 group-hover:text-primary-900 text-sm mb-1">
+                              <h4 className="font-bold text-gray-900 group-hover:text-purple-900 text-base mb-2 transition-colors duration-300">
                                 {type.label}
                               </h4>
-                              <p className="text-xs text-gray-500 group-hover:text-primary-700 leading-relaxed">
+                              <p className="text-sm text-gray-600 group-hover:text-purple-700 leading-relaxed transition-colors duration-300">
                                 {type.description}
                               </p>
                             </div>
                           </div>
+                          
+                          {/* Decorative corner element */}
+                          <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-white/20 to-transparent rounded-bl-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                         </button>
                       );
                     })}
@@ -1837,48 +1882,52 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="p-6 space-y-6">
           {rules.map((rule, index) => {
             const typeConfig = getTypeConfig(rule.type);
             const IconComponent = typeConfig.icon;
             
             return (
-              <div key={rule.id} className="rule-card animate-slide-up">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="step-indicator text-xs">
-                      {index + 1}
-                    </div>
-                    <div className="p-2 bg-primary-50 rounded-lg">
-                      <IconComponent className="h-5 w-5 text-primary-600" />
-                    </div>
-                    <div className="flex-1">
-                      <button
-                        type="button"
-                        onClick={() => openTransformationModal(rule.id)}
-                        className="w-full p-3 bg-white border border-gray-300 rounded-lg hover:border-primary-400 hover:bg-primary-50 transition-all duration-200 text-left focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <IconComponent className="h-4 w-4 text-primary-600" />
-                            <span className="font-medium text-gray-900">{typeConfig.label}</span>
+              <div key={rule.id} className="glass-strong rounded-xl animate-fade-in-up hover-lift transition-all duration-300 overflow-hidden">
+                {/* Rule Header */}
+                <div className="relative bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-8 h-8 glass rounded-full flex items-center justify-center border border-white/30 text-sm font-bold text-indigo-600">
+                        {index + 1}
+                      </div>
+                      <div className="p-3 glass rounded-xl border border-white/30">
+                        <IconComponent className="h-6 w-6 text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <button
+                          type="button"
+                          onClick={() => openTransformationModal(rule.id)}
+                          className="w-full p-4 glass rounded-xl border border-white/30 hover:border-purple-300/50 hover:shadow-lg transition-all duration-300 text-left focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:ring-offset-2 group"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <IconComponent className="h-5 w-5 text-purple-600" />
+                              <span className="font-bold text-gray-900 group-hover:text-purple-900 transition-colors duration-300">{typeConfig.label}</span>
+                            </div>
+                            <ArrowUpDown className="h-5 w-5 text-gray-400 group-hover:text-purple-600 transition-colors duration-300" />
                           </div>
-                          <ArrowUpDown className="h-4 w-4 text-gray-400" />
-                        </div>
-                      </button>
-                      <p className="text-sm text-gray-500 mt-1">{typeConfig.description}</p>
+                        </button>
+                        <p className="text-sm text-gray-600 mt-2 px-4">{typeConfig.description}</p>
+                      </div>
                     </div>
+                    <button
+                      onClick={() => removeRule(rule.id)}
+                      className="p-3 glass rounded-xl border border-white/30 text-gray-400 hover:text-red-600 hover:border-red-300/50 hover:bg-red-50/50 transition-all duration-300 group"
+                      title="Remove rule"
+                    >
+                      <Trash2 className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => removeRule(rule.id)}
-                    className="btn-ghost p-2 text-gray-400 hover:text-red-600 hover:bg-red-50"
-                    title="Remove rule"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
                 </div>
                 
-                <div className="mt-4">
+                {/* Rule Configuration */}
+                <div className="p-6 bg-white/50 backdrop-blur-sm">
                   {renderRuleFields(rule)}
                 </div>
               </div>
@@ -1886,14 +1935,17 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
           })}
           
           {/* Add Another Rule Button */}
-          <div className="pt-4 border-t border-gray-100">
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-purple-500/5 to-pink-500/5 rounded-xl" />
             <button
               onClick={addRule}
-              className="w-full p-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-primary-400 hover:bg-primary-50 transition-all duration-200 group"
+              className="relative w-full p-6 glass border-2 border-dashed border-indigo-300/50 rounded-xl hover:border-purple-400/70 hover:bg-gradient-to-br hover:from-indigo-50/50 hover:to-purple-50/50 transition-all duration-300 group hover-lift"
             >
-              <div className="flex items-center justify-center space-x-2 text-gray-500 group-hover:text-primary-600">
-                <Plus className="h-5 w-5" />
-                <span className="font-medium">Add Another Transformation</span>
+              <div className="flex items-center justify-center space-x-3 text-gray-600 group-hover:text-purple-600">
+                <div className="p-2 glass rounded-xl border border-white/30 group-hover:border-purple-300/50 transition-all duration-300">
+                  <Plus className="h-6 w-6 transition-transform group-hover:rotate-90 duration-300" />
+                </div>
+                <span className="font-bold text-lg">Add Another Transformation</span>
               </div>
             </button>
           </div>

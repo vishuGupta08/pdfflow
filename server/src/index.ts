@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -11,6 +12,7 @@ import transformRoutes from './routes/transform';
 import downloadRoutes from './routes/download';
 import previewRoutes from './routes/preview';
 import editRoutes from './routes/edit';
+import feedbackRoutes from './routes/feedback';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -80,6 +82,7 @@ app.use('/api/transform', transformRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/preview', previewRoutes);
 app.use('/api/edit', editRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -89,13 +92,14 @@ app.get('/health', (req, res) => {
 // Default route
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'PDFFlow API Server',
+    message: 'PDF Clinic API Server',
     version: '1.0.0',
     endpoints: [
       'POST /api/upload',
       'POST /api/transform',
       'GET /api/download/:id',
       'GET /api/preview/:id',
+      'POST /api/feedback',
       'GET /health'
     ]
   });
@@ -110,7 +114,7 @@ app.use('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 PDFFlow server running on port ${PORT}`);
+  console.log(`🚀 PDF Clinic server running on port ${PORT}`);
   console.log(`📁 Uploads directory: ${uploadsDir}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });

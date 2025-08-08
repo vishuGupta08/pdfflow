@@ -1,6 +1,6 @@
-# PDFFlow - Comprehensive PDF Transformation Platform
+# PDF Clinic - Comprehensive PDF Transformation Platform
 
-A powerful, modern web application for transforming PDF documents with an extensive range of professional features. Built with React, TypeScript, Node.js, and Express.
+A powerful, modern web application for transforming PDF documents with an extensive range of professional features. Built with React, TypeScript, Node.js, and Express. PDF Clinic makes professional PDF editing simple everywhere.
 
 ## ✨ Recent Enhancements (v2.0)
 

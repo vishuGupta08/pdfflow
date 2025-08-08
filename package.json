@@ -1,7 +1,7 @@
 {
-  "name": "pdfflow",
+  "name": "pdf-clinic",
   "version": "1.0.0",
-  "description": "Advanced PDF transformation SaaS platform",
+  "description": "Transform your PDFs with PDF Clinic - Professional PDF editing made simple everywhere",
   "private": true,
   "engines": {
     "node": ">=18.0.0",
@@ -37,7 +37,7 @@
     "saas",
     "editor"
   ],
-  "author": "PDFFlow Team",
+  "author": "PDF Clinic Team",
   "license": "MIT",
   "dependencies": {
     "@auth0/nextjs-auth0": "^4.7.0"

@@ -88,7 +88,7 @@ async function handleApiResponse<T>(response: Response): Promise<ExtendedApiResp
 }
 
 // Use environment variable for API base URL, fallback to localhost for development
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002/api';
 
 export const editPDF = async (
   fileId: string,
@@ -337,5 +337,32 @@ export class ApiService {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  }
+
+  static async submitFeedback(feedbackData: {
+    name: string;
+    email: string;
+    subject: string;
+    message: string;
+    rating: number;
+  }): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(feedbackData)
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Feedback submission error:', error);
+      return {
+        success: false,
+        error: 'Network error. Please check your connection and try again.'
+      };
+    }
   }
 }
