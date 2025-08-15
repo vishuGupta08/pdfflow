@@ -497,13 +497,57 @@ export class PDFService {
   // New transformation methods
 
   private static async mergePDFs(targetDoc: PDFDocument, mergeFileIds: string[]): Promise<void> {
-    // Note: This implementation would need access to the file storage system
-    // For now, this is a placeholder that shows the concept
     console.log(`🔗 Merge operation requested for ${mergeFileIds.length} files`);
-    // In a real implementation, you would:
-    // 1. Load each PDF from the file IDs
-    // 2. Copy pages from each source PDF to the target document
-    // 3. Handle page ordering and metadata
+    
+    if (!mergeFileIds || mergeFileIds.length === 0) {
+      console.log('⚠️ No merge files provided, skipping merge operation');
+      return;
+    }
+
+    // Import the uploadedFiles from upload route
+    const { uploadedFiles } = await import('../routes/upload');
+    
+    try {
+      for (const fileId of mergeFileIds) {
+        console.log(`� Processing merge file: ${fileId}`);
+        
+        // Get file info from the uploadedFiles map
+        const fileInfo = uploadedFiles.get(fileId);
+        if (!fileInfo) {
+          console.warn(`⚠️ File not found in upload registry: ${fileId}`);
+          continue;
+        }
+
+        // Check if file exists on disk
+        if (!fs.existsSync(fileInfo.path)) {
+          console.warn(`⚠️ File not found on disk: ${fileInfo.path}`);
+          continue;
+        }
+
+        // Load the PDF to merge
+        const mergeFileBytes = fs.readFileSync(fileInfo.path);
+        const mergePdfDoc = await PDFDocument.load(mergeFileBytes, { ignoreEncryption: true });
+        
+        console.log(`📖 Loaded PDF with ${mergePdfDoc.getPageCount()} pages from ${fileInfo.originalName}`);
+        
+        // Copy all pages from the merge PDF to the target document
+        const pageIndices = Array.from({ length: mergePdfDoc.getPageCount() }, (_, i) => i);
+        const copiedPages = await targetDoc.copyPages(mergePdfDoc, pageIndices);
+        
+        // Add the copied pages to the target document
+        copiedPages.forEach(page => {
+          targetDoc.addPage(page);
+        });
+        
+        console.log(`✅ Successfully merged ${copiedPages.length} pages from ${fileInfo.originalName}`);
+      }
+      
+      console.log(`🎉 Merge operation completed! Final document has ${targetDoc.getPageCount()} pages`);
+      
+    } catch (error) {
+      console.error('❌ Error during PDF merge operation:', error);
+      throw new Error(`Failed to merge PDFs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   private static async splitPDF(pdfDoc: PDFDocument, splitBy: string, pagesPerSplit?: number, splitRanges?: Array<{ start: number; end: number; name?: string }>): Promise<void> {

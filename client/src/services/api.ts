@@ -177,6 +177,41 @@ export const transformPDF = async (
   }
 };
 
+// Generate a live preview URL for transformations
+export const generateLivePreview = async (
+  fileId: string,
+  transformations: TransformationRule[]
+): Promise<string | null> => {
+  try {
+    // Remove the 'id' field from transformation rules before sending to API
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const transformationsWithoutId = transformations.map(({ id: _id, ...rule }) => rule);
+    
+    const response = await fetch(`${API_BASE_URL}/transform/preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fileId,
+        transformations: transformationsWithoutId,
+      }),
+    });
+
+    if (response.ok) {
+      // Create a blob URL for the PDF response
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } else {
+      console.error('Live preview failed:', await response.text());
+      return null;
+    }
+  } catch (error) {
+    console.error('Live preview error:', error);
+    return null;
+  }
+};
+
 export class ApiService {
   static async uploadFile(file: File): Promise<ExtendedApiResponse<UploadedFile>> {
     const formData = new FormData();

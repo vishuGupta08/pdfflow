@@ -343,5 +343,72 @@ router.get('/:resultId', (req, res) => {
   });
 });
 
+// Live preview endpoint - transforms PDF with current rules and returns it
+router.post('/preview', async (req: Request, res: Response) => {
+  try {
+    console.log('Live preview request:', req.body);
+    
+    const { error, value } = transformSchema.validate(req.body);
+    if (error) {
+      console.error('Live preview validation error:', error.details);
+      return res.status(400).json({ 
+        error: 'Invalid preview request', 
+        details: error.details 
+      });
+    }
+
+    const { fileId, transformations } = value as TransformRequest;
+
+    // Get uploaded file data
+    const fileData = uploadedFiles.get(fileId);
+    if (!fileData) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Check if file exists
+    if (!fs.existsSync(fileData.path)) {
+      return res.status(404).json({ error: 'File not found on disk' });
+    }
+
+    console.log(`Generating live preview for file: ${fileData.originalName}`);
+
+    // Map and validate transformations (same logic as main transform endpoint)
+    const mappedTransformations = transformations.map((t: any) => {
+      // Handle 'edit_pdf' type by converting to the original operation
+      if (t.type === 'edit_pdf') {
+        return {
+          type: t.operation || 'text-replace',
+          ...t
+        };
+      }
+      return t;
+    });
+
+    console.log('Mapped transformations for preview:', mappedTransformations);
+
+    // Apply transformations to generate preview
+    const transformedPDF = await PDFService.transformPDF(fileData.path, mappedTransformations);
+    
+    // Set headers for PDF viewing
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    // Return the transformed PDF directly
+    res.send(transformedPDF);
+      
+  } catch (previewError) {
+    console.error('Live preview error:', previewError);
+    const errorMessage = previewError instanceof Error ? previewError.message : 'Unknown preview error';
+    res.status(500).json({ 
+      error: 'Failed to generate preview', 
+      details: errorMessage 
+    });
+  }
+});
+
 export { transformationResults };
 export default router;

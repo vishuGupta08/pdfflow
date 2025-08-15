@@ -23,6 +23,7 @@ function App() {
   const [transformResult, setTransformResult] = useState<TransformResult | null>(null)
   const [isTransforming, setIsTransforming] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [showLivePreview, setShowLivePreview] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showEditor, setShowEditor] = useState(false)
   const [editResult, setEditResult] = useState<TransformResult | null>(null)
@@ -143,13 +144,23 @@ function App() {
   }
 
   const handlePreview = () => {
-    console.log('🔍 Preview button clicked - Preview ID:', transformResult?.previewId);
-    setCurrentStep('preview');
-    setShowPreview(true)
+    console.log('🔍 Preview button clicked');
+    if (transformResult?.previewId) {
+      // Show transformed preview
+      setCurrentStep('preview');
+      setShowPreview(true);
+    } else if (uploadedFile) {
+      // Show live preview with current transformations
+      setShowLivePreview(true);
+    }
   }
 
   const handleClosePreview = () => {
     setShowPreview(false)
+  }
+
+  const handleCloseLivePreview = () => {
+    setShowLivePreview(false)
   }
 
   const handleDownload = () => {
@@ -447,22 +458,31 @@ function App() {
                       <span className="font-semibold text-green-600">{transformationRules.length}</span> transformation{transformationRules.length !== 1 ? 's' : ''} will be applied to your PDF
                     </p>
                     
-                                          {isTransforming ? (
-                        <>
-                          <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          <span>Processing Magic...</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                          </svg>
-                          <span>Transform PDF</span>
-                        </>
-                      )}
+                    <button
+                      onClick={handleTransform}
+                      disabled={isTransforming}
+                      className="btn-primary btn-xl group relative overflow-hidden"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <div className="relative flex items-center">
+                        {isTransforming ? (
+                          <>
+                            <svg className="animate-spin h-6 w-6 text-white mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Processing Magic...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <span>Transform PDF</span>
+                          </>
+                        )}
+                      </div>
+                    </button>
                   </div>
                 </div>
               )}
@@ -594,6 +614,8 @@ function App() {
               <PreviewPanel
                 rules={transformationRules}
                 fileName={uploadedFile?.originalName}
+                uploadedFile={uploadedFile}
+                onPreview={() => setShowLivePreview(true)}
               />
             </div>
           </div>
@@ -671,13 +693,25 @@ function App() {
         }}
       />
 
-      {/* PDF Preview Modal */}
+      {/* PDF Preview Modal - Transformed Result */}
       {showPreview && transformResult?.previewId && (
         <PDFPreview
           fileId={transformResult.previewId}
           fileName={transformResult.fileName}
           onClose={handleClosePreview}
           onDownload={handleDownload}
+        />
+      )}
+
+      {/* PDF Live Preview Modal - Current Transformations */}
+      {showLivePreview && uploadedFile && (
+        <PDFPreview
+          fileId={uploadedFile.fileId}
+          fileName={uploadedFile.originalName}
+          onClose={handleCloseLivePreview}
+          onDownload={handleDownload}
+          transformations={transformationRules}
+          showOriginal={transformationRules.length === 0}
         />
       )}
 

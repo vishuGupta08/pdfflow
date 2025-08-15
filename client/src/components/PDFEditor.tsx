@@ -106,8 +106,6 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({
   
   const pageRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const pdfUrl = `${API_BASE_URL.replace('/api', '')}/api/preview/${fileId}`;
   
   const truncateFileName = (fileName: string, maxLength: number = 35): string => {
     if (fileName.length <= maxLength) return fileName;
@@ -128,6 +126,8 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({
   };
 
   console.log('🔍 PDFEditor - fileId:', fileId);
+  
+  const pdfUrl = `${API_BASE_URL.replace('/api', '')}/api/preview/upload/${fileId}`;
   console.log('🔍 PDFEditor - pdfUrl:', pdfUrl);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {

@@ -1,6 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut, RotateCw, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut, RotateCw, X, RefreshCw } from 'lucide-react';
+import { TransformationRule } from '../types';
+import { generateLivePreview } from '../services/api';
 
 // Use the correct worker version that matches the installed pdfjs-dist (3.11.174)
 pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -10,24 +12,99 @@ interface PDFPreviewProps {
   fileName?: string;
   onClose: () => void;
   onDownload: () => void;
+  // Optional: when provided, will show live preview with transformations
+  transformations?: TransformationRule[];
+  // Optional: when true, will use uploaded file instead of transformed preview
+  showOriginal?: boolean;
 }
 
 // Get API base URL from environment variables
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002/api';
 
 export const PDFPreview: React.FC<PDFPreviewProps> = ({
   fileId,
   fileName,
   onClose,
-  onDownload
+  onDownload,
+  transformations = [],
+  showOriginal = false
 }) => {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.0);
   const [rotation, setRotation] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState<boolean>(false);
+  const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
 
-  const pdfUrl = `${API_BASE_URL.replace('/api', '')}/api/preview/${fileId}`;
+  // Determine which URL to use for the PDF
+  const getPreviewUrl = useCallback(() => {
+    console.log('🔗 getPreviewUrl called:');
+    console.log('  - showOriginal:', showOriginal);
+    console.log('  - transformations.length:', transformations.length);
+    console.log('  - livePreviewUrl:', livePreviewUrl);
+    
+    if (showOriginal || transformations.length === 0) {
+      // Show original uploaded file
+      const originalUrl = `${API_BASE_URL}/upload/preview/${fileId}`;
+      console.log('  → Using original URL:', originalUrl);
+      return originalUrl;
+    } else if (livePreviewUrl) {
+      // Show live preview with transformations
+      console.log('  → Using live preview URL:', livePreviewUrl);
+      return livePreviewUrl;
+    } else {
+      // Show transformed preview (existing behavior)
+      const transformedUrl = `${API_BASE_URL}/preview/${fileId}`;
+      console.log('  → Using transformed URL:', transformedUrl);
+      return transformedUrl;
+    }
+  }, [fileId, showOriginal, transformations.length, livePreviewUrl]);
+
+  // Generate live preview when transformations change
+  useEffect(() => {
+    console.log('🔍 PDFPreview useEffect triggered:');
+    console.log('  - showOriginal:', showOriginal);
+    console.log('  - transformations.length:', transformations.length);
+    console.log('  - transformations:', transformations);
+    console.log('  - fileId:', fileId);
+    
+    if (!showOriginal && transformations.length > 0) {
+      console.log('🚀 Generating live preview...');
+      setIsGeneratingPreview(true);
+      generateLivePreview(fileId, transformations)
+        .then((url) => {
+          console.log('✅ Live preview URL generated:', url);
+          if (url) {
+            setLivePreviewUrl(url);
+          }
+        })
+        .catch((error) => {
+          console.error('❌ Failed to generate live preview:', error);
+        })
+        .finally(() => {
+          setIsGeneratingPreview(false);
+        });
+    } else {
+      console.log('ℹ️ Not generating live preview (showOriginal or no transformations)');
+      // Clean up previous live preview URL
+      if (livePreviewUrl) {
+        URL.revokeObjectURL(livePreviewUrl);
+        setLivePreviewUrl(null);
+      }
+    }
+  }, [fileId, transformations, showOriginal, livePreviewUrl]);
+
+  // Clean up blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (livePreviewUrl) {
+        URL.revokeObjectURL(livePreviewUrl);
+      }
+    };
+  }, [livePreviewUrl]);
+
+  const pdfUrl = getPreviewUrl();
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     console.log('PDF loaded successfully, pages:', numPages);
@@ -60,6 +137,28 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
     setRotation(prev => (prev + 90) % 360);
   };
 
+  const refreshPreview = () => {
+    if (transformations.length > 0) {
+      setIsGeneratingPreview(true);
+      generateLivePreview(fileId, transformations)
+        .then((url) => {
+          if (url) {
+            // Clean up previous URL
+            if (livePreviewUrl) {
+              URL.revokeObjectURL(livePreviewUrl);
+            }
+            setLivePreviewUrl(url);
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to refresh preview:', error);
+        })
+        .finally(() => {
+          setIsGeneratingPreview(false);
+        });
+    }
+  };
+
   const truncateFileName = (fileName: string, maxLength: number = 40): string => {
     if (fileName.length <= maxLength) return fileName;
     
@@ -86,7 +185,20 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">PDF Preview</h2>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-xl font-semibold text-gray-900">PDF Preview</h2>
+              {isGeneratingPreview && (
+                <div className="flex items-center space-x-1 text-blue-600">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Generating preview...</span>
+                </div>
+              )}
+              {!showOriginal && transformations.length > 0 && !isGeneratingPreview && (
+                <span className="text-sm text-green-600 bg-green-50 px-2 py-1 rounded">
+                  Live Preview
+                </span>
+              )}
+            </div>
             {fileName && (
               <p className="text-sm text-gray-500 mt-1" title={fileName}>
                 {truncateFileName(fileName)}
@@ -94,6 +206,17 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
             )}
           </div>
           <div className="flex items-center space-x-2">
+            {!showOriginal && transformations.length > 0 && (
+              <button
+                onClick={refreshPreview}
+                disabled={isGeneratingPreview}
+                className="btn-secondary"
+                title="Refresh preview with current transformations"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isGeneratingPreview ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            )}
             <button
               onClick={onDownload}
               className="btn-primary"

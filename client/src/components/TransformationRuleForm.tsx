@@ -1,4 +1,4 @@
-import { Plus, Trash2, Settings, RotateCw, Shield, Eye, Hash, Scissors, ArrowUpDown, Archive, Image, FileText, FilePlus, Crop, Palette, MessageSquare, Square, Maximize2, Lock, Copy, GitMerge, KeyRound } from 'lucide-react';
+import { Plus, Trash2, Settings, RotateCw, Shield, Eye, Hash, Scissors, ArrowUpDown, Archive, Image, FileText, FilePlus, Crop, Palette, MessageSquare, Square, Maximize2, Lock, Copy, GitMerge, KeyRound, FileDown } from 'lucide-react';
 import type { TransformationRule, UploadedFile } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { useRef, useState } from 'react';
@@ -24,6 +24,7 @@ const transformationTypes = [
   { value: 'merge_pdfs', label: 'Merge PDFs', icon: GitMerge, description: 'Combine multiple PDF files into one', category: 'Document Management' },
   { value: 'split_pdf', label: 'Split PDF', icon: Copy, description: 'Split PDF into multiple documents', category: 'Document Management' },
   { value: 'compress', label: 'Compress PDF', icon: Archive, description: 'Reduce file size with various quality options', category: 'Document Management' },
+  { value: 'convert_to_word', label: 'Convert to Word', icon: FileDown, description: 'Convert PDF to Word document with high accuracy', category: 'Document Management' },
   
   // Content & Annotations
   { value: 'add_watermark', label: 'Add Watermark', icon: Shield, description: 'Add text watermark to all pages', category: 'Content & Annotations' },
@@ -48,6 +49,9 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [showTransformationModal, setShowTransformationModal] = useState(false);
+  
+  // Local state to manage raw input values for page fields
+  const [pageInputValues, setPageInputValues] = useState<Record<string, string>>({});
 
   const addRule = () => {
     const newRule: TransformationRule = {
@@ -60,7 +64,16 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
   const addRuleWithType = (type: TransformationRule['type']) => {
     const newRule: TransformationRule = {
       id: uuidv4(),
-      type
+      type,
+      // Set defaults for PDF to Word conversion
+      ...(type === 'convert_to_word' && {
+        wordFormat: 'docx',
+        conversionQuality: 'medium',
+        preserveLayout: true,
+        extractImages: true,
+        convertTables: true,
+        ocrLanguage: 'eng'
+      })
     };
     onRulesChange([...rules, newRule]);
   };
@@ -237,56 +250,134 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
 
   const renderRuleFields = (rule: TransformationRule) => {
     switch (rule.type) {
-      case 'remove_pages':
+      case 'remove_pages': {
+        const inputKey = `${rule.id}_pages`;
+        const currentInputValue = pageInputValues[inputKey] || rule.pages?.join(',') || '';
+        
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="form-label">
                 Pages to remove
               </label>
               <input
                 type="text"
                 placeholder="e.g., 1,3,5 or 1-3,7"
                 className="input-field"
-                value={rule.pages?.join(',') || ''}
+                value={currentInputValue}
                 onChange={(e) => {
-                  const pages = e.target.value
-                    .split(',')
-                    .map(p => parseInt(p.trim()))
-                    .filter(p => !isNaN(p));
+                  const newValue = e.target.value;
+                  
+                  // Update local state immediately for responsive UI
+                  setPageInputValues(prev => ({ ...prev, [inputKey]: newValue }));
+                  
+                  console.log('🔍 Input change:', newValue);
+                  
+                  // Parse the input to extract page numbers and ranges
+                  const pages: number[] = [];
+                  const parts = newValue.split(',');
+                  console.log('📝 Split parts:', parts);
+                  
+                  for (const part of parts) {
+                    const trimmed = part.trim();
+                    if (!trimmed) continue;
+                    
+                    if (trimmed.includes('-')) {
+                      // Handle range (e.g., "1-5")
+                      const rangeParts = trimmed.split('-');
+                      console.log('📊 Range parts:', rangeParts);
+                      if (rangeParts.length === 2) {
+                        const start = parseInt(rangeParts[0].trim());
+                        const end = parseInt(rangeParts[1].trim());
+                        if (!isNaN(start) && !isNaN(end) && start <= end) {
+                          for (let i = start; i <= end; i++) {
+                            if (!pages.includes(i)) {
+                              pages.push(i);
+                            }
+                          }
+                        }
+                      }
+                    } else {
+                      // Handle single page
+                      const pageNum = parseInt(trimmed);
+                      if (!isNaN(pageNum) && !pages.includes(pageNum)) {
+                        pages.push(pageNum);
+                      }
+                    }
+                  }
+                  
+                  // Sort pages in ascending order
+                  pages.sort((a, b) => a - b);
+                  console.log('✅ Final pages:', pages);
                   updateRule(rule.id, { pages });
                 }}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Enter page numbers separated by commas (e.g., 1,3,5)
+              <p className="form-helper-text">
+                Enter page numbers separated by commas (e.g., 1,3,5) or ranges (e.g., 1-3,7-9)
               </p>
             </div>
           </div>
         );
+      }
 
-      case 'rotate_pages':
+      case 'rotate_pages': {
+        const inputKey = `${rule.id}_pages`;
+        const currentInputValue = pageInputValues[inputKey] || rule.pages?.join(',') || '';
+        
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="form-grid-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="form-label">
                 Pages to rotate
               </label>
               <input
                 type="text"
-                placeholder="e.g., 1,2,5"
+                placeholder="e.g., 1,2,5 or 1-3,7"
                 className="input-field"
-                value={rule.pages?.join(',') || ''}
+                value={currentInputValue}
                 onChange={(e) => {
-                  const pages = e.target.value
-                    .split(',')
-                    .map(p => parseInt(p.trim()))
-                    .filter(p => !isNaN(p));
+                  const newValue = e.target.value;
+                  
+                  // Update local state immediately for responsive UI
+                  setPageInputValues(prev => ({ ...prev, [inputKey]: newValue }));
+                  
+                  console.log('🔍 Rotate input change:', newValue);
+                  
+                  // Parse the input to extract page numbers and ranges
+                  const pages: number[] = [];
+                  const parts = newValue.split(',');
+                  
+                  for (const part of parts) {
+                    const trimmed = part.trim();
+                    if (!trimmed) continue;
+                    
+                    if (trimmed.includes('-')) {
+                      // Handle range (e.g., "1-5")
+                      const [start, end] = trimmed.split('-').map(n => parseInt(n.trim()));
+                      if (!isNaN(start) && !isNaN(end) && start <= end) {
+                        for (let i = start; i <= end; i++) {
+                          if (!pages.includes(i)) {
+                            pages.push(i);
+                          }
+                        }
+                      }
+                    } else {
+                      // Handle single page
+                      const pageNum = parseInt(trimmed);
+                      if (!isNaN(pageNum) && !pages.includes(pageNum)) {
+                        pages.push(pageNum);
+                      }
+                    }
+                  }
+                  
+                  // Sort pages in ascending order
+                  pages.sort((a, b) => a - b);
                   updateRule(rule.id, { pages });
                 }}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="form-label">
                 Rotation angle
               </label>
               <select
@@ -302,12 +393,13 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
             </div>
           </div>
         );
+      }
 
       case 'add_watermark':
         return (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="form-grid-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="form-label">
                 Watermark text
               </label>
               <input
@@ -319,7 +411,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="form-label">
                 Position
               </label>
               <select
@@ -339,7 +431,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="form-label">
                 Opacity: {Math.round((rule.opacity || 0.3) * 100)}%
               </label>
               <input
@@ -347,7 +439,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                 min="0.1"
                 max="1"
                 step="0.1"
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                className="input-field"
                 value={rule.opacity || 0.3}
                 onChange={(e) => updateRule(rule.id, { opacity: parseFloat(e.target.value) })}
               />
@@ -453,7 +545,10 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
           </div>
         );
 
-      case 'rearrange_pages':
+      case 'rearrange_pages': {
+        const inputKey = `${rule.id}_pageOrder`;
+        const currentInputValue = pageInputValues[inputKey] || rule.pageOrder?.join(',') || '';
+        
         return (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -463,9 +558,17 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
               type="text"
               placeholder="e.g., 3,1,2,4"
               className="input-field"
-              value={rule.pageOrder?.join(',') || ''}
+              value={currentInputValue}
               onChange={(e) => {
-                const order = e.target.value
+                const newValue = e.target.value;
+                
+                // Update local state immediately for responsive UI
+                setPageInputValues(prev => ({ ...prev, [inputKey]: newValue }));
+                
+                console.log('🔍 Rearrange input change:', newValue);
+                
+                // Parse the input to extract page order
+                const order = newValue
                   .split(',')
                   .map(p => parseInt(p.trim()))
                   .filter(p => !isNaN(p));
@@ -477,6 +580,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
             </p>
           </div>
         );
+      }
 
       case 'compress': {
         const originalFileSize = uploadedFile?.size || 0;
@@ -547,7 +651,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                   min="10"
                   max="100"
                   step="5"
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  className="input-field"
                   value={rule.imageQuality || 85}
                   onChange={(e) => updateRule(rule.id, { imageQuality: parseInt(e.target.value) })}
                 />
@@ -627,22 +731,24 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
               </div>
             )}
 
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-start space-x-3">
-                <div className="p-2 bg-primary-100 rounded-lg">
-                  <Archive className="h-5 w-5 text-primary-600" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-medium text-gray-900 mb-1">Compression Info</h4>
-                  <div className="text-sm text-gray-600 space-y-1">
-                    {rule.compressionLevel === 'low' && <p>• Reduces file size by 5-15% with minimal quality loss (300 DPI)</p>}
-                    {rule.compressionLevel === 'medium' && <p>• Reduces file size by 35-55% with good quality balance (150 DPI)</p>}
-                    {rule.compressionLevel === 'high' && <p>• Reduces file size by 60-80% with noticeable quality reduction (100 DPI)</p>}
-                    {rule.compressionLevel === 'maximum' && <p>• Reduces file size by 75-95% with significant quality reduction (72 DPI)</p>}
-                    {rule.compressionLevel === 'custom' && <p>• Attempts to reach your target file size with optimal quality</p>}
-                    <p>• Images are downsampled and optimized using Ghostscript</p>
-                    <p>• Text and vector graphics remain sharp at all compression levels</p>
-                    <p>• Uses professional PDF optimization techniques</p>
+            <div className="info-box">
+              <div className="info-box-content">
+                <div className="flex items-start space-x-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Archive className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="info-box-title">Compression Information</h4>
+                    <div className="info-box-text space-y-1">
+                      {rule.compressionLevel === 'low' && <p>• Reduces file size by 5-15% with minimal quality loss (300 DPI)</p>}
+                      {rule.compressionLevel === 'medium' && <p>• Reduces file size by 35-55% with good quality balance (150 DPI)</p>}
+                      {rule.compressionLevel === 'high' && <p>• Reduces file size by 60-80% with noticeable quality reduction (100 DPI)</p>}
+                      {rule.compressionLevel === 'maximum' && <p>• Reduces file size by 75-95% with significant quality reduction (72 DPI)</p>}
+                      {rule.compressionLevel === 'custom' && <p>• Attempts to reach your target file size with optimal quality</p>}
+                      <p>• Images are downsampled and optimized using Ghostscript</p>
+                      <p>• Text and vector graphics remain sharp at all compression levels</p>
+                      <p>• Uses professional PDF optimization techniques</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1071,7 +1177,10 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
           </div>
         );
 
-      case 'crop_pages':
+      case 'crop_pages': {
+        const inputKey = `${rule.id}_pages`;
+        const currentInputValue = pageInputValues[inputKey] || rule.pages?.join(',') || '';
+        
         return (
           <div className="space-y-4">
             <div>
@@ -1080,14 +1189,46 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g., 1,2,5 (leave empty for all pages)"
+                placeholder="e.g., 1,2,5 or 1-3,7 (leave empty for all pages)"
                 className="input-field"
-                value={rule.pages?.join(',') || ''}
+                value={currentInputValue}
                 onChange={(e) => {
-                  const pages = e.target.value
-                    .split(',')
-                    .map(p => parseInt(p.trim()))
-                    .filter(p => !isNaN(p));
+                  const newValue = e.target.value;
+                  
+                  // Update local state immediately for responsive UI
+                  setPageInputValues(prev => ({ ...prev, [inputKey]: newValue }));
+                  
+                  console.log('🔍 Crop input change:', newValue);
+                  
+                  // Parse the input to extract page numbers and ranges
+                  const pages: number[] = [];
+                  const parts = newValue.split(',');
+                  
+                  for (const part of parts) {
+                    const trimmed = part.trim();
+                    if (!trimmed) continue;
+                    
+                    if (trimmed.includes('-')) {
+                      // Handle range (e.g., "1-5")
+                      const [start, end] = trimmed.split('-').map(n => parseInt(n.trim()));
+                      if (!isNaN(start) && !isNaN(end) && start <= end) {
+                        for (let i = start; i <= end; i++) {
+                          if (!pages.includes(i)) {
+                            pages.push(i);
+                          }
+                        }
+                      }
+                    } else {
+                      // Handle single page
+                      const pageNum = parseInt(trimmed);
+                      if (!isNaN(pageNum) && !pages.includes(pageNum)) {
+                        pages.push(pageNum);
+                      }
+                    }
+                  }
+                  
+                  // Sort pages in ascending order
+                  pages.sort((a, b) => a - b);
                   updateRule(rule.id, { pages });
                 }}
               />
@@ -1181,6 +1322,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
             )}
           </div>
         );
+      }
 
       case 'add_background':
         return (
@@ -1193,7 +1335,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                 <div className="flex space-x-2">
                   <input
                     type="color"
-                    className="w-12 h-10 rounded border border-gray-300"
+                    className="input-field w-12"
                     value={rule.backgroundColor || '#ffffff'}
                     onChange={(e) => updateRule(rule.id, { backgroundColor: e.target.value })}
                   />
@@ -1216,7 +1358,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                   min="0.1"
                   max="1"
                   step="0.1"
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  className="input-field"
                   value={rule.backgroundOpacity || 1}
                   onChange={(e) => updateRule(rule.id, { backgroundOpacity: parseFloat(e.target.value) })}
                 />
@@ -1381,7 +1523,10 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
           </div>
         );
 
-      case 'add_border':
+      case 'add_border': {
+        const inputKey = `${rule.id}_pages`;
+        const currentInputValue = pageInputValues[inputKey] || rule.pages?.join(',') || '';
+        
         return (
           <div className="space-y-4">
             <div>
@@ -1390,14 +1535,46 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g., 1,2,5 (leave empty for all pages)"
+                placeholder="e.g., 1,2,5 or 1-3,7 (leave empty for all pages)"
                 className="input-field"
-                value={rule.pages?.join(',') || ''}
+                value={currentInputValue}
                 onChange={(e) => {
-                  const pages = e.target.value
-                    .split(',')
-                    .map(p => parseInt(p.trim()))
-                    .filter(p => !isNaN(p));
+                  const newValue = e.target.value;
+                  
+                  // Update local state immediately for responsive UI
+                  setPageInputValues(prev => ({ ...prev, [inputKey]: newValue }));
+                  
+                  console.log('🔍 Border input change:', newValue);
+                  
+                  // Parse the input to extract page numbers and ranges
+                  const pages: number[] = [];
+                  const parts = newValue.split(',');
+                  
+                  for (const part of parts) {
+                    const trimmed = part.trim();
+                    if (!trimmed) continue;
+                    
+                    if (trimmed.includes('-')) {
+                      // Handle range (e.g., "1-5")
+                      const [start, end] = trimmed.split('-').map(n => parseInt(n.trim()));
+                      if (!isNaN(start) && !isNaN(end) && start <= end) {
+                        for (let i = start; i <= end; i++) {
+                          if (!pages.includes(i)) {
+                            pages.push(i);
+                          }
+                        }
+                      }
+                    } else {
+                      // Handle single page
+                      const pageNum = parseInt(trimmed);
+                      if (!isNaN(pageNum) && !pages.includes(pageNum)) {
+                        pages.push(pageNum);
+                      }
+                    }
+                  }
+                  
+                  // Sort pages in ascending order
+                  pages.sort((a, b) => a - b);
                   updateRule(rule.id, { pages });
                 }}
               />
@@ -1469,8 +1646,12 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
             </div>
           </div>
         );
+      }
 
-      case 'resize_pages':
+      case 'resize_pages': {
+        const inputKey = `${rule.id}_pages`;
+        const currentInputValue = pageInputValues[inputKey] || rule.pages?.join(',') || '';
+        
         return (
           <div className="space-y-4">
             <div>
@@ -1479,14 +1660,46 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g., 1,2,5 (leave empty for all pages)"
+                placeholder="e.g., 1,2,5 or 1-3,7 (leave empty for all pages)"
                 className="input-field"
-                value={rule.pages?.join(',') || ''}
+                value={currentInputValue}
                 onChange={(e) => {
-                  const pages = e.target.value
-                    .split(',')
-                    .map(p => parseInt(p.trim()))
-                    .filter(p => !isNaN(p));
+                  const newValue = e.target.value;
+                  
+                  // Update local state immediately for responsive UI
+                  setPageInputValues(prev => ({ ...prev, [inputKey]: newValue }));
+                  
+                  console.log('🔍 Resize input change:', newValue);
+                  
+                  // Parse the input to extract page numbers and ranges
+                  const pages: number[] = [];
+                  const parts = newValue.split(',');
+                  
+                  for (const part of parts) {
+                    const trimmed = part.trim();
+                    if (!trimmed) continue;
+                    
+                    if (trimmed.includes('-')) {
+                      // Handle range (e.g., "1-5")
+                      const [start, end] = trimmed.split('-').map(n => parseInt(n.trim()));
+                      if (!isNaN(start) && !isNaN(end) && start <= end) {
+                        for (let i = start; i <= end; i++) {
+                          if (!pages.includes(i)) {
+                            pages.push(i);
+                          }
+                        }
+                      }
+                    } else {
+                      // Handle single page
+                      const pageNum = parseInt(trimmed);
+                      if (!isNaN(pageNum) && !pages.includes(pageNum)) {
+                        pages.push(pageNum);
+                      }
+                    }
+                  }
+                  
+                  // Sort pages in ascending order
+                  pages.sort((a, b) => a - b);
                   updateRule(rule.id, { pages });
                 }}
               />
@@ -1589,6 +1802,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
             </div>
           </div>
         );
+      }
 
       case 'password_protect':
         return (
@@ -1753,6 +1967,192 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      case 'convert_to_word':
+        return (
+          <div className="space-y-6">
+            {/* Word Format Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">Word Format</label>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: 'docx', label: 'DOCX (Recommended)', description: 'Modern Word format with better compatibility' },
+                  { value: 'doc', label: 'DOC (Legacy)', description: 'Compatible with older Word versions' }
+                ].map((format) => (
+                  <label key={format.value} className="relative">
+                    <input
+                      type="radio"
+                      name={`wordFormat-${rule.id}`}
+                      value={format.value}
+                      checked={rule.wordFormat === format.value}
+                      onChange={(e) => updateRule(rule.id, { wordFormat: e.target.value as 'docx' | 'doc' })}
+                      className="sr-only"
+                    />
+                    <div className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                      rule.wordFormat === format.value
+                        ? 'border-primary-500 bg-primary-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}>
+                      <div className="font-medium text-sm">{format.label}</div>
+                      <div className="text-xs text-gray-500">{format.description}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Conversion Quality */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">Conversion Quality</label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {[
+                  { value: 'fast', label: 'Fast', description: 'Quick conversion with good quality' },
+                  { value: 'medium', label: 'Medium Quality', description: 'Balanced speed and formatting' },
+                  { value: 'high', label: 'High Quality', description: 'Best accuracy, slower processing' }
+                ].map((quality) => (
+                  <label key={quality.value} className="relative">
+                    <input
+                      type="radio"
+                      name={`quality-${rule.id}`}
+                      value={quality.value}
+                      checked={rule.conversionQuality === quality.value}
+                      onChange={(e) => updateRule(rule.id, { conversionQuality: e.target.value as 'fast' | 'medium' | 'high' })}
+                      className="sr-only"
+                    />
+                    <div className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                      rule.conversionQuality === quality.value
+                        ? 'border-primary-500 bg-primary-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}>
+                      <div className="font-medium text-sm">{quality.label}</div>
+                      <div className="text-xs text-gray-500">{quality.description}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Advanced Options */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium text-gray-700 border-b border-gray-200 pb-2">Advanced Options</h4>
+              
+              {/* Preserve Layout */}
+              <label className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  checked={rule.preserveLayout || false}
+                  onChange={(e) => updateRule(rule.id, { preserveLayout: e.target.checked })}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Preserve Layout</span>
+                  <p className="text-xs text-gray-500">Maintain original document formatting and positioning</p>
+                </div>
+              </label>
+
+              {/* Extract Images */}
+              <label className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  checked={rule.extractImages || false}
+                  onChange={(e) => updateRule(rule.id, { extractImages: e.target.checked })}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Extract Images</span>
+                  <p className="text-xs text-gray-500">Include images from the PDF in the Word document</p>
+                </div>
+              </label>
+
+              {/* Convert Tables */}
+              <label className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  checked={rule.convertTables || false}
+                  onChange={(e) => updateRule(rule.id, { convertTables: e.target.checked })}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Convert Tables</span>
+                  <p className="text-xs text-gray-500">Convert PDF tables to editable Word tables</p>
+                </div>
+              </label>
+            </div>
+
+            {/* OCR Language for Scanned PDFs */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">OCR Language (for scanned PDFs)</label>
+              <select
+                className="input-field"
+                value={rule.ocrLanguage || 'eng'}
+                onChange={(e) => updateRule(rule.id, { ocrLanguage: e.target.value as typeof rule.ocrLanguage })}
+              >
+                <option value="eng">English</option>
+                <option value="spa">Spanish</option>
+                <option value="fra">French</option>
+                <option value="deu">German</option>
+                <option value="ita">Italian</option>
+                <option value="por">Portuguese</option>
+                <option value="rus">Russian</option>
+                <option value="chi_sim">Chinese (Simplified)</option>
+                <option value="chi_tra">Chinese (Traditional)</option>
+                <option value="jpn">Japanese</option>
+                <option value="kor">Korean</option>
+                <option value="ara">Arabic</option>
+                <option value="hin">Hindi</option>
+                <option value="auto">Auto-detect</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Select the primary language for OCR text recognition in scanned documents
+              </p>
+            </div>
+
+            {/* Page Range for Conversion */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Page Range (Optional)</label>
+              <input
+                type="text"
+                placeholder="e.g., 1-5 or leave empty for all pages"
+                className="input-field"
+                value={
+                  rule.conversionPageRange 
+                    ? `${rule.conversionPageRange.start}-${rule.conversionPageRange.end}`
+                    : ''
+                }
+                onChange={(e) => {
+                  const value = e.target.value.trim();
+                  if (!value) {
+                    updateRule(rule.id, { conversionPageRange: undefined });
+                  } else {
+                    const match = value.match(/^(\d+)-(\d+)$/);
+                    if (match) {
+                      const start = parseInt(match[1]);
+                      const end = parseInt(match[2]);
+                      updateRule(rule.id, { conversionPageRange: { start, end } });
+                    }
+                  }
+                }}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Specify page range to convert (e.g., 1-5). Leave empty to convert all pages.
+              </p>
+            </div>
+
+            {/* Conversion Info */}
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start space-x-3">
+                <FileDown className="w-5 h-5 text-blue-600 mt-0.5" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium mb-1">High-Accuracy Conversion</p>
+                  <p>Our advanced conversion engine preserves formatting, fonts, and layout while creating fully editable Word documents.</p>
+                  {rule.conversionQuality === 'high' && (
+                    <p className="mt-2 text-xs text-blue-700">High quality selected - processing may take longer for complex documents.</p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         );
 

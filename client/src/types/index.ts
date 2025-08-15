@@ -1,6 +1,6 @@
 export interface TransformationRule {
   id: string;
-  type: 'remove_pages' | 'rotate_pages' | 'add_watermark' | 'merge_pdfs' | 'compress' | 'redact_text' | 'add_page_numbers' | 'rearrange_pages' | 'extract_pages' | 'split_pdf' | 'add_image' | 'add_header_footer' | 'add_blank_pages' | 'crop_pages' | 'add_background' | 'add_text_annotation' | 'add_border' | 'resize_pages' | 'password_protect' | 'remove_password' | 'edit_pdf';
+  type: 'remove_pages' | 'rotate_pages' | 'add_watermark' | 'merge_pdfs' | 'compress' | 'redact_text' | 'add_page_numbers' | 'rearrange_pages' | 'extract_pages' | 'split_pdf' | 'add_image' | 'add_header_footer' | 'add_blank_pages' | 'crop_pages' | 'add_background' | 'add_text_annotation' | 'add_border' | 'resize_pages' | 'password_protect' | 'remove_password' | 'edit_pdf' | 'convert_to_word';
   pages?: number[];
   angle?: number;
   text?: string;
@@ -102,6 +102,15 @@ export interface TransformationRule {
   currentPassword?: string; // Current password to verify access
   removeUserPassword?: boolean; // Remove user password
   removeOwnerPassword?: boolean; // Remove owner password
+  
+  // PDF to Word conversion options
+  wordFormat?: 'docx' | 'doc'; // Output format
+  conversionQuality?: 'high' | 'medium' | 'fast'; // Conversion quality vs speed
+  preserveLayout?: boolean; // Try to maintain original layout
+  ocrLanguage?: 'eng' | 'spa' | 'fra' | 'deu' | 'ita' | 'por' | 'rus' | 'chi_sim' | 'chi_tra' | 'jpn' | 'kor' | 'ara'; // OCR language for scanned PDFs
+  extractImages?: boolean; // Extract and embed images
+  convertTables?: boolean; // Special handling for tables
+  conversionPageRange?: { start: number; end: number }; // Convert only specific pages
   
   // PDF editing options
   edits?: Array<{

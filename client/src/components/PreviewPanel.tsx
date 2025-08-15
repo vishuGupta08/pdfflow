@@ -5,9 +5,10 @@ interface PreviewPanelProps {
   rules: TransformationRule[];
   fileName?: string;
   uploadedFile?: UploadedFile | null;
+  onPreview?: () => void;
 }
 
-export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, uploadedFile }) => {
+export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, uploadedFile, onPreview }) => {
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -275,6 +276,21 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, upl
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Preview Button */}
+      {fileName && onPreview && (
+        <div className="mb-6">
+          <button
+            onClick={onPreview}
+            className="w-full btn-secondary flex items-center justify-center space-x-2"
+          >
+            <Eye className="h-4 w-4" />
+            <span>
+              {rules.length > 0 ? 'Preview with Transformations' : 'Preview Original PDF'}
+            </span>
+          </button>
         </div>
       )}
 
