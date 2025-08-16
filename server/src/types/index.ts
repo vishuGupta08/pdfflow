@@ -1,5 +1,5 @@
 export interface TransformationRule {
-  type: 'remove_pages' | 'rotate_pages' | 'add_watermark' | 'merge_pdfs' | 'compress' | 'redact_text' | 'add_page_numbers' | 'rearrange_pages' | 'extract_pages' | 'split_pdf' | 'add_image' | 'add_header_footer' | 'add_blank_pages' | 'crop_pages' | 'add_background' | 'add_text_annotation' | 'add_border' | 'resize_pages' | 'password_protect' | 'remove_password' | 'edit_pdf';
+  type: 'remove_pages' | 'rotate_pages' | 'add_watermark' | 'merge_pdfs' | 'compress' | 'redact_text' | 'add_page_numbers' | 'rearrange_pages' | 'extract_pages' | 'split_pdf' | 'add_image' | 'add_header_footer' | 'add_blank_pages' | 'crop_pages' | 'add_background' | 'add_text_annotation' | 'add_border' | 'resize_pages' | 'password_protect' | 'remove_password' | 'edit_pdf' | 'convert_to_word';
   pages?: number[];
   angle?: number;
   text?: string;
@@ -126,6 +126,17 @@ export interface TransformationRule {
     };
     imageData?: string; // base64 image data
   }>;
+  
+  // Convert to Word options
+  wordFormat?: 'docx' | 'doc';
+  conversionQuality?: 'low' | 'medium' | 'high';
+  preserveLayout?: boolean;
+  extractImages?: boolean;
+  convertTables?: boolean;
+  ocrLanguage?: string;
+  includeHeaders?: boolean;
+  includeFooters?: boolean;
+  retainFormatting?: boolean;
 }
 
 export interface TransformRequest {

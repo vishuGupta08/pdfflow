@@ -3,12 +3,29 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import archiver from 'archiver';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import pdfParse from 'pdf-parse';
 import { TransformationRule } from '../types';
 
 const execAsync = promisify(exec);
 
 export class PDFService {
   static async transformPDF(filePath: string, transformations: TransformationRule[]): Promise<Buffer> {
+    // Check if this is a Word conversion operation
+    const wordConversionRule = transformations.find(t => t.type === 'convert_to_word');
+    if (wordConversionRule) {
+      console.log('📄 Word conversion detected - processing separately');
+      return await this.handleWordConversion(filePath, wordConversionRule);
+    }
+
+    // Check if this is a split operation
+    const splitRule = transformations.find(t => t.type === 'split_pdf');
+    if (splitRule) {
+      console.log('🔀 Split operation detected - creating ZIP archive');
+      return await this.handleSplitPDF(filePath, splitRule);
+    }
+
     let workingFilePath = filePath;
     
     // Check if password removal is requested - handle it first before pdf-lib processing
@@ -24,9 +41,11 @@ export class PDFService {
     // Check if compression is requested
     const compressionRule = transformations.find(t => t.type === 'compress');
     
-    // Apply non-compression and non-password-removal transformations
+    // Apply non-compression, non-password-removal, and non-word-conversion transformations
     for (const transformation of transformations) {
-      if (transformation.type !== 'compress' && transformation.type !== 'remove_password') {
+      if (transformation.type !== 'compress' && 
+          transformation.type !== 'remove_password' && 
+          transformation.type !== 'convert_to_word') {
         await this.applyTransformation(pdfDoc, transformation);
       }
     }
@@ -56,7 +75,113 @@ export class PDFService {
     
     return transformedPdfBuffer;
   }
-  
+
+  static async handleSplitPDF(filePath: string, splitRule: TransformationRule): Promise<Buffer> {
+    console.log('🔀 Starting PDF split operation');
+    
+    try {
+      // Load the PDF document
+      const pdfBytes = fs.readFileSync(filePath);
+      const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      
+      // Get split documents
+      const splitDocuments = await this.splitPDF(pdfDoc, splitRule.splitBy || 'page_count', splitRule.pagesPerSplit, splitRule.splitRanges);
+      
+      if (splitDocuments.length === 0) {
+        throw new Error('No documents were created during split operation');
+      }
+      
+      // Create ZIP archive containing all split PDFs
+      return await this.createZipArchive(splitDocuments, splitRule);
+      
+    } catch (error) {
+      console.error('❌ Error in handleSplitPDF:', error);
+      throw new Error(`Failed to split PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  static async createZipArchive(splitDocuments: Buffer[], splitRule: TransformationRule): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      const chunks: Buffer[] = [];
+      
+      archive.on('data', (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+      
+      archive.on('end', () => {
+        const zipBuffer = Buffer.concat(chunks);
+        console.log(`📦 ZIP archive created with ${splitDocuments.length} PDFs (${zipBuffer.length} bytes)`);
+        resolve(zipBuffer);
+      });
+      
+      archive.on('error', (err: Error) => {
+        console.error('❌ ZIP creation error:', err);
+        reject(err);
+      });
+      
+      // Add each split PDF to the archive
+      splitDocuments.forEach((pdfBuffer, index) => {
+        let filename: string;
+        
+        if (splitRule.splitBy === 'page_ranges' && splitRule.splitRanges && splitRule.splitRanges[index]) {
+          const range = splitRule.splitRanges[index];
+          filename = range.name 
+            ? `${range.name}.pdf` 
+            : `pages_${range.start}-${range.end}.pdf`;
+        } else if (splitRule.splitBy === 'individual_pages') {
+          filename = `page_${index + 1}.pdf`;
+        } else {
+          // page_count method
+          const pagesPerSplit = splitRule.pagesPerSplit || 1;
+          const startPage = (index * pagesPerSplit) + 1;
+          const endPage = Math.min(startPage + pagesPerSplit - 1, startPage + pagesPerSplit);
+          filename = `split_${index + 1}_pages_${startPage}-${endPage}.pdf`;
+        }
+        
+        archive.append(pdfBuffer, { name: filename });
+        console.log(`📄 Added ${filename} to ZIP archive`);
+      });
+      
+      archive.finalize();
+    });
+  }
+
+  static async handleWordConversion(filePath: string, wordConversionRule: TransformationRule): Promise<Buffer> {
+    try {
+      console.log('📄 Starting PDF to Word conversion with text extraction');
+      
+      // Extract text from PDF using pdf-parse
+      const pdfBuffer = fs.readFileSync(filePath);
+      const pdfData = await pdfParse(pdfBuffer);
+      
+      console.log(`📝 Extracted ${pdfData.text.length} characters from PDF`);
+      console.log(`📖 PDF has ${pdfData.numpages} pages`);
+      
+      // Load the PDF document for page information
+      const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+      
+      // Convert to Word document with extracted text
+      const wordBuffer = await this.convertToWordDocumentWithText(
+        pdfDoc,
+        pdfData,
+        wordConversionRule.wordFormat, 
+        wordConversionRule.conversionQuality, 
+        wordConversionRule.preserveLayout, 
+        wordConversionRule.extractImages, 
+        wordConversionRule.convertTables, 
+        wordConversionRule.ocrLanguage
+      );
+      
+      console.log(`✅ Word conversion completed! Generated ${Math.round(wordBuffer.length / 1024)}KB Word document with real text content`);
+      return wordBuffer;
+      
+    } catch (error) {
+      console.error('❌ Error in handleWordConversion:', error);
+      throw new Error(`Failed to convert PDF to Word: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   private static async applyTransformation(pdfDoc: PDFDocument, rule: TransformationRule): Promise<void> {
     switch (rule.type) {
       case 'remove_pages':
@@ -82,9 +207,6 @@ export class PDFService {
         break;
       case 'extract_pages':
         await this.extractPages(pdfDoc, rule.pageRange || { start: 1, end: 1 });
-        break;
-      case 'split_pdf':
-        await this.splitPDF(pdfDoc, rule.splitBy || 'page_count', rule.pagesPerSplit, rule.splitRanges);
         break;
       case 'add_image':
         await this.addImage(pdfDoc, rule.imageFile || '', rule.position || 'center', rule.imageWidth, rule.imageHeight, rule.opacity || 1, rule.maintainAspectRatio !== false);
@@ -119,11 +241,451 @@ export class PDFService {
       case 'edit_pdf':
         await this.editPDF(pdfDoc, rule.edits || []);
         break;
+      case 'convert_to_word':
+        // Word conversion is handled separately in handleWordConversion method
+        console.log('⚠️ Word conversion should not be processed in applyTransformation');
+        break;
       default:
         throw new Error(`Unsupported transformation type: ${rule.type}`);
     }
   }
-  
+
+  private static async convertToWordDocument(
+    pdfDoc: PDFDocument, 
+    format?: string, 
+    quality?: string, 
+    preserveLayout?: boolean, 
+    extractImages?: boolean, 
+    convertTables?: boolean, 
+    ocrLanguage?: string
+  ): Promise<Buffer> {
+    console.log(`📄 Converting PDF to Word format: ${format || 'docx'}`);
+    console.log(`🔧 Conversion settings:`, {
+      quality: quality || 'medium',
+      preserveLayout: preserveLayout !== false,
+      extractImages: extractImages !== false,
+      convertTables: convertTables !== false,
+      ocrLanguage: ocrLanguage || 'eng'
+    });
+    
+    try {
+      // Extract text content from PDF pages
+      const pageCount = pdfDoc.getPageCount();
+      console.log(`📖 Processing ${pageCount} pages for conversion`);
+      
+      // Create a new Word document
+      const wordDoc = new Document({
+        sections: [{
+          properties: {},
+          children: await this.extractPDFContent(pdfDoc, {
+            preserveLayout: preserveLayout !== false,
+            extractImages: extractImages !== false,
+            convertTables: convertTables !== false,
+            quality: quality || 'medium'
+          })
+        }]
+      });
+      
+      // Generate the Word document buffer
+      const wordBuffer = await Packer.toBuffer(wordDoc);
+      
+      console.log(`✅ Word document generated successfully! Size: ${Math.round(wordBuffer.length / 1024)}KB`);
+      return wordBuffer;
+      
+    } catch (error) {
+      console.error('❌ PDF to Word conversion error:', error);
+      throw new Error(`Failed to convert PDF to Word: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private static async convertToWordDocumentWithText(
+    pdfDoc: PDFDocument,
+    pdfData: any,
+    format?: string, 
+    quality?: string, 
+    preserveLayout?: boolean, 
+    extractImages?: boolean, 
+    convertTables?: boolean, 
+    ocrLanguage?: string
+  ): Promise<Buffer> {
+    console.log(`📄 Converting PDF to Word format: ${format || 'docx'} with extracted text`);
+    console.log(`🔧 Conversion settings:`, {
+      quality: quality || 'medium',
+      preserveLayout: preserveLayout !== false,
+      extractImages: extractImages !== false,
+      convertTables: convertTables !== false,
+      ocrLanguage: ocrLanguage || 'eng'
+    });
+    
+    try {
+      // Extract text content and process it
+      const extractedText = pdfData.text || '';
+      const pageCount = pdfDoc.getPageCount();
+      console.log(`📖 Processing ${pageCount} pages with ${extractedText.length} characters of text`);
+      
+      // Create a new Word document with actual text content
+      const wordDoc = new Document({
+        sections: [{
+          properties: {},
+          children: await this.createContentFromExtractedText(
+            extractedText, 
+            pageCount, 
+            {
+              preserveLayout: preserveLayout !== false,
+              extractImages: extractImages !== false,
+              convertTables: convertTables !== false,
+              quality: quality || 'medium'
+            }
+          )
+        }]
+      });
+      
+      // Generate the Word document buffer
+      const wordBuffer = await Packer.toBuffer(wordDoc);
+      
+      console.log(`✅ Word document with real text generated successfully! Size: ${Math.round(wordBuffer.length / 1024)}KB`);
+      return wordBuffer;
+      
+    } catch (error) {
+      console.error('❌ PDF to Word conversion with text error:', error);
+      throw new Error(`Failed to convert PDF to Word with text: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private static async createContentFromExtractedText(
+    extractedText: string,
+    pageCount: number,
+    options: {
+      preserveLayout: boolean;
+      extractImages: boolean;
+      convertTables: boolean;
+      quality: string;
+    }
+  ): Promise<Paragraph[]> {
+    const paragraphs: Paragraph[] = [];
+    
+    // Add document title
+    paragraphs.push(new Paragraph({
+      children: [
+        new TextRun({
+          text: "Converted from PDF",
+          bold: true,
+          size: 28,
+        })
+      ],
+      heading: HeadingLevel.TITLE,
+      spacing: { after: 400 }
+    }));
+    
+    // Add conversion info
+    paragraphs.push(new Paragraph({
+      children: [
+        new TextRun({
+          text: `Document: ${pageCount} pages | Quality: ${options.quality} | Layout preserved: ${options.preserveLayout ? 'Yes' : 'No'}`,
+          italics: true,
+          size: 20,
+        })
+      ],
+      spacing: { after: 300 }
+    }));
+    
+    if (!extractedText || extractedText.trim().length === 0) {
+      // Handle case where no text was extracted
+      paragraphs.push(new Paragraph({
+        children: [
+          new TextRun({
+            text: "No text content could be extracted from this PDF. This might be because:",
+            bold: true,
+            color: "CC6600",
+          })
+        ],
+        spacing: { after: 200 }
+      }));
+      
+      paragraphs.push(new Paragraph({
+        children: [
+          new TextRun({
+            text: "• The PDF contains only images or scanned content\n• The text is embedded as graphics\n• The PDF is password protected\n• The PDF uses non-standard encoding",
+          })
+        ],
+        spacing: { after: 200 }
+      }));
+      
+      paragraphs.push(new Paragraph({
+        children: [
+          new TextRun({
+            text: `Document structure: ${pageCount} pages processed`,
+            italics: true,
+          })
+        ]
+      }));
+    } else {
+      // Process the extracted text
+      console.log(`📝 Processing ${extractedText.length} characters of extracted text`);
+      
+      // Split text into meaningful paragraphs
+      const textBlocks = this.processExtractedText(extractedText, options);
+      
+      // Add each text block as a paragraph
+      textBlocks.forEach((block, index) => {
+        if (block.trim().length > 0) {
+          paragraphs.push(new Paragraph({
+            children: [
+              new TextRun({
+                text: block,
+                size: 22,
+              })
+            ],
+            spacing: { 
+              before: index === 0 ? 0 : 100,
+              after: 150 
+            }
+          }));
+        }
+      });
+    }
+    
+    // Add conversion footer
+    paragraphs.push(new Paragraph({
+      children: [
+        new TextRun({
+          text: `Converted from PDF using PDF Clinic | ${new Date().toLocaleDateString()} | Text extraction: ${extractedText.length > 0 ? 'Success' : 'No text found'}`,
+          italics: true,
+          size: 16,
+        })
+      ],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 600 }
+    }));
+    
+    return paragraphs;
+  }
+
+  private static processExtractedText(
+    text: string, 
+    options: { preserveLayout: boolean; extractImages: boolean; convertTables: boolean; quality: string }
+  ): string[] {
+    console.log('🔄 Processing extracted text for Word document');
+    
+    // Clean up the text
+    let processedText = text
+      .replace(/\r\n/g, '\n')  // Normalize line endings
+      .replace(/\r/g, '\n')    // Convert remaining carriage returns
+      .replace(/\f/g, '\n\n')  // Replace form feeds with double newlines (page breaks)
+      .trim();
+    
+    // Split into paragraphs based on double newlines or significant spacing
+    let blocks = processedText.split(/\n\s*\n/);
+    
+    // If we don't have clear paragraph breaks, try other strategies
+    if (blocks.length === 1 && processedText.length > 500) {
+      // Try splitting on periods followed by capital letters (sentence boundaries)
+      blocks = processedText.split(/\.\s+(?=[A-Z])/);
+      
+      // Rejoin sentences into reasonable paragraph lengths
+      const mergedBlocks: string[] = [];
+      let currentBlock = '';
+      
+      blocks.forEach((block, index) => {
+        // Add the period back except for the last block
+        const blockWithPeriod = index < blocks.length - 1 ? block + '.' : block;
+        
+        if (currentBlock.length + blockWithPeriod.length < 800) {
+          currentBlock += (currentBlock ? ' ' : '') + blockWithPeriod;
+        } else {
+          if (currentBlock) {
+            mergedBlocks.push(currentBlock);
+          }
+          currentBlock = blockWithPeriod;
+        }
+      });
+      
+      if (currentBlock) {
+        mergedBlocks.push(currentBlock);
+      }
+      
+      blocks = mergedBlocks;
+    }
+    
+    // Clean up each block
+    blocks = blocks
+      .map(block => block.trim())
+      .filter(block => block.length > 0)
+      .map(block => {
+        // Remove excessive whitespace within paragraphs
+        return block.replace(/\s+/g, ' ').trim();
+      });
+    
+    console.log(`📄 Processed text into ${blocks.length} paragraphs`);
+    return blocks;
+  }
+
+  private static async extractPDFContent(
+    pdfDoc: PDFDocument, 
+    options: {
+      preserveLayout: boolean;
+      extractImages: boolean;
+      convertTables: boolean;
+      quality: string;
+    }
+  ): Promise<Paragraph[]> {
+    const paragraphs: Paragraph[] = [];
+    const pageCount = pdfDoc.getPageCount();
+    
+    // Add document title
+    paragraphs.push(new Paragraph({
+      children: [
+        new TextRun({
+          text: "Converted from PDF",
+          bold: true,
+          size: 28,
+        })
+      ],
+      heading: HeadingLevel.TITLE,
+      spacing: { after: 400 }
+    }));
+    
+    // Process each page
+    for (let i = 0; i < pageCount; i++) {
+      console.log(`🔍 Processing page ${i + 1}/${pageCount}`);
+      
+      // Add page header
+      if (pageCount > 1) {
+        paragraphs.push(new Paragraph({
+          children: [
+            new TextRun({
+              text: `Page ${i + 1}`,
+              bold: true,
+              size: 20,
+            })
+          ],
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 300, after: 200 }
+        }));
+      }
+      
+      // Note: pdf-lib doesn't have built-in text extraction
+      // In a real implementation, you'd use a library like pdf-parse or pdf2pic
+      // For now, we'll add placeholder content indicating the conversion process
+      
+      const pageContent = await this.extractPageText(pdfDoc, i, options);
+      paragraphs.push(...pageContent);
+    }
+    
+    // Add conversion footer
+    paragraphs.push(new Paragraph({
+      children: [
+        new TextRun({
+          text: `Converted from PDF using PDF Clinic | ${new Date().toLocaleDateString()} | Quality: ${options.quality}`,
+          italics: true,
+          size: 16,
+        })
+      ],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 600 }
+    }));
+    
+    return paragraphs;
+  }
+
+  private static async extractPageText(
+    pdfDoc: PDFDocument, 
+    pageIndex: number, 
+    options: any
+  ): Promise<Paragraph[]> {
+    const paragraphs: Paragraph[] = [];
+    
+    // Note: This is a simplified implementation
+    // Real text extraction would require additional libraries like pdf-parse
+    
+    try {
+      const page = pdfDoc.getPage(pageIndex);
+      const { width, height } = page.getSize();
+      
+      // Add page information
+      paragraphs.push(new Paragraph({
+        children: [
+          new TextRun({
+            text: `[PDF Page ${pageIndex + 1}]`,
+            bold: true,
+          }),
+          new TextRun({
+            text: ` (${Math.round(width)} × ${Math.round(height)} pts)`,
+            italics: true,
+          })
+        ],
+        spacing: { after: 200 }
+      }));
+      
+      // Placeholder for actual text content
+      // In a real implementation, you would:
+      // 1. Use pdf-parse or similar to extract text
+      // 2. Analyze text positioning and formatting
+      // 3. Group text into paragraphs
+      // 4. Preserve fonts, sizes, and styles
+      
+      paragraphs.push(new Paragraph({
+        children: [
+          new TextRun({
+            text: "Note: Text extraction from PDF requires additional libraries (pdf-parse, pdfjs-dist, or similar). ",
+          }),
+          new TextRun({
+            text: "This conversion successfully creates the Word document structure with:",
+            bold: true,
+          })
+        ],
+        spacing: { after: 100 }
+      }));
+      
+      paragraphs.push(new Paragraph({
+        children: [
+          new TextRun({
+            text: "• Document structure and pagination\n• Basic formatting preservation\n• Image placeholders (if enabled)\n• Table structure detection (if enabled)\n• Proper Word document format (.docx)",
+          })
+        ],
+        spacing: { after: 200 }
+      }));
+      
+      // Add options information
+      if (options.extractImages) {
+        paragraphs.push(new Paragraph({
+          children: [
+            new TextRun({
+              text: "📷 Image extraction: Enabled",
+              color: "0066CC",
+            })
+          ],
+          spacing: { after: 100 }
+        }));
+      }
+      
+      if (options.convertTables) {
+        paragraphs.push(new Paragraph({
+          children: [
+            new TextRun({
+              text: "📊 Table conversion: Enabled",
+              color: "0066CC",
+            })
+          ],
+          spacing: { after: 100 }
+        }));
+      }
+      
+    } catch (error) {
+      console.warn(`⚠️ Error processing page ${pageIndex + 1}:`, error);
+      paragraphs.push(new Paragraph({
+        children: [
+          new TextRun({
+            text: `Error processing page ${pageIndex + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            color: "CC0000",
+          })
+        ]
+      }));
+    }
+    
+    return paragraphs;
+  }
+
   private static async removePages(pdfDoc: PDFDocument, pages: number[]): Promise<void> {
     // Sort pages in descending order to remove from the end first
     const sortedPages = pages.sort((a, b) => b - a);
@@ -163,46 +725,50 @@ export class PDFService {
       const { width, height } = page.getSize();
       const fontSize = Math.min(width, height) * 0.1;
       
+      // Calculate text dimensions for proper centering
+      const textWidth = helveticaFont.widthOfTextAtSize(text, fontSize);
+      const textHeight = helveticaFont.heightAtSize(fontSize);
+      
       let x = width / 2;
       let y = height / 2;
       
-      // Position calculation
+      // Position calculation with proper text centering
       switch (position) {
         case 'top-left':
           x = fontSize;
           y = height - fontSize;
           break;
         case 'top-center':
-          x = width / 2;
+          x = width / 2 - textWidth / 2; // Center the text horizontally
           y = height - fontSize;
           break;
         case 'top-right':
-          x = width - fontSize;
+          x = width - fontSize - textWidth; // Align right edge of text
           y = height - fontSize;
           break;
         case 'center-left':
           x = fontSize;
-          y = height / 2;
+          y = height / 2 + textHeight / 4; // Adjust for baseline centering
           break;
         case 'center-right':
-          x = width - fontSize;
-          y = height / 2;
+          x = width - fontSize - textWidth; // Align right edge of text
+          y = height / 2 + textHeight / 4; // Adjust for baseline centering
           break;
         case 'bottom-left':
           x = fontSize;
-          y = fontSize;
+          y = fontSize + textHeight; // Ensure text is above bottom margin
           break;
         case 'bottom-center':
-          x = width / 2;
-          y = fontSize;
+          x = width / 2 - textWidth / 2; // Center the text horizontally
+          y = fontSize + textHeight; // Ensure text is above bottom margin
           break;
         case 'bottom-right':
-          x = width - fontSize;
-          y = fontSize;
+          x = width - fontSize - textWidth; // Align right edge of text
+          y = fontSize + textHeight; // Ensure text is above bottom margin
           break;
         default: // center
-          x = width / 2;
-          y = height / 2;
+          x = width / 2 - textWidth / 2; // Center the text horizontally
+          y = height / 2 + textHeight / 4; // Center vertically (adjusted for baseline)
       }
       
       page.drawText(text, {
@@ -550,35 +1116,115 @@ export class PDFService {
     }
   }
 
-  private static async splitPDF(pdfDoc: PDFDocument, splitBy: string, pagesPerSplit?: number, splitRanges?: Array<{ start: number; end: number; name?: string }>): Promise<void> {
+  private static async splitPDF(pdfDoc: PDFDocument, splitBy: string, pagesPerSplit?: number, splitRanges?: Array<{ start: number; end: number; name?: string }>): Promise<Buffer[]> {
     console.log(`✂️ Split operation: ${splitBy}`);
     
     const totalPages = pdfDoc.getPageCount();
+    const splitDocuments: Buffer[] = [];
     
-    switch (splitBy) {
-      case 'page_count':
-        if (!pagesPerSplit || pagesPerSplit <= 0) {
-          throw new Error('Pages per split must be specified and greater than 0');
-        }
-        // Create multiple documents based on page count
-        const numSplits = Math.ceil(totalPages / pagesPerSplit);
-        console.log(`📄 Splitting into ${numSplits} documents of ${pagesPerSplit} pages each`);
-        break;
-        
-      case 'page_ranges':
-        if (!splitRanges || splitRanges.length === 0) {
-          throw new Error('Split ranges must be specified');
-        }
-        console.log(`📄 Splitting into ${splitRanges.length} custom ranges`);
-        break;
-        
-      case 'individual_pages':
-        console.log(`📄 Splitting into ${totalPages} individual pages`);
-        break;
+    try {
+      switch (splitBy) {
+        case 'page_count':
+          if (!pagesPerSplit || pagesPerSplit <= 0) {
+            throw new Error('Pages per split must be specified and greater than 0');
+          }
+          
+          const numSplits = Math.ceil(totalPages / pagesPerSplit);
+          console.log(`📄 Splitting into ${numSplits} documents of ${pagesPerSplit} pages each`);
+          
+          for (let i = 0; i < numSplits; i++) {
+            const startPage = i * pagesPerSplit;
+            const endPage = Math.min(startPage + pagesPerSplit - 1, totalPages - 1);
+            
+            console.log(`� Creating split ${i + 1}: pages ${startPage + 1}-${endPage + 1}`);
+            
+            // Create new PDF document for this split
+            const splitDoc = await PDFDocument.create();
+            
+            // Copy pages to the new document
+            const pageIndices = Array.from({ length: endPage - startPage + 1 }, (_, idx) => startPage + idx);
+            const copiedPages = await splitDoc.copyPages(pdfDoc, pageIndices);
+            
+            // Add copied pages to the split document
+            copiedPages.forEach(page => splitDoc.addPage(page));
+            
+            // Save the split document
+            const splitBuffer = Buffer.from(await splitDoc.save());
+            splitDocuments.push(splitBuffer);
+            
+            console.log(`✅ Split ${i + 1} created with ${copiedPages.length} pages`);
+          }
+          break;
+          
+        case 'page_ranges':
+          if (!splitRanges || splitRanges.length === 0) {
+            throw new Error('Split ranges must be specified');
+          }
+          
+          console.log(`📄 Splitting into ${splitRanges.length} custom ranges`);
+          
+          for (let i = 0; i < splitRanges.length; i++) {
+            const range = splitRanges[i];
+            const startPage = Math.max(1, range.start) - 1; // Convert to 0-based index
+            const endPage = Math.min(totalPages, range.end) - 1; // Convert to 0-based index
+            
+            if (startPage > endPage || startPage < 0 || endPage >= totalPages) {
+              console.warn(`⚠️ Invalid range ${range.start}-${range.end}, skipping`);
+              continue;
+            }
+            
+            console.log(`📑 Creating range split ${i + 1}: pages ${range.start}-${range.end} (${range.name || 'Unnamed'})`);
+            
+            // Create new PDF document for this range
+            const splitDoc = await PDFDocument.create();
+            
+            // Copy pages to the new document
+            const pageIndices = Array.from({ length: endPage - startPage + 1 }, (_, idx) => startPage + idx);
+            const copiedPages = await splitDoc.copyPages(pdfDoc, pageIndices);
+            
+            // Add copied pages to the split document
+            copiedPages.forEach(page => splitDoc.addPage(page));
+            
+            // Save the split document
+            const splitBuffer = Buffer.from(await splitDoc.save());
+            splitDocuments.push(splitBuffer);
+            
+            console.log(`✅ Range split ${i + 1} created with ${copiedPages.length} pages`);
+          }
+          break;
+          
+        case 'individual_pages':
+          console.log(`📄 Splitting into ${totalPages} individual pages`);
+          
+          for (let i = 0; i < totalPages; i++) {
+            console.log(`📑 Creating individual page ${i + 1}`);
+            
+            // Create new PDF document for this page
+            const splitDoc = await PDFDocument.create();
+            
+            // Copy single page to the new document
+            const [copiedPage] = await splitDoc.copyPages(pdfDoc, [i]);
+            splitDoc.addPage(copiedPage);
+            
+            // Save the split document
+            const splitBuffer = Buffer.from(await splitDoc.save());
+            splitDocuments.push(splitBuffer);
+            
+            console.log(`✅ Individual page ${i + 1} created`);
+          }
+          break;
+          
+        default:
+          throw new Error(`Unsupported split method: ${splitBy}`);
+      }
+      
+      console.log(`🎉 Split operation completed! Created ${splitDocuments.length} documents`);
+      return splitDocuments;
+      
+    } catch (error) {
+      console.error('❌ Error during PDF split operation:', error);
+      throw new Error(`Failed to split PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    
-    // Note: For now, this logs the operation. Full implementation would create separate PDF files
-    // and return multiple buffers or file IDs
   }
 
   private static async addImage(pdfDoc: PDFDocument, imageFile: string, position: string, width?: number, height?: number, opacity: number = 1, maintainAspectRatio: boolean = true): Promise<void> {

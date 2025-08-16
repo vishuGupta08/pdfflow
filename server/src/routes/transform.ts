@@ -21,7 +21,8 @@ const transformSchema = Joi.object({
         'compress', 'redact_text', 'add_page_numbers', 'rearrange_pages', 'extract_pages',
         'split_pdf', 'add_image', 'add_header_footer', 'add_blank_pages', 'crop_pages', 
         'add_background', 'text_annotation', 'add_border', 'resize_pages', 'password_protect', 
-        'remove_password', 'text-replace', 'watermark', 'extract-pages', 'edit_pdf'
+        'remove_password', 'text-replace', 'watermark', 'extract-pages', 'edit_pdf',
+        'convert_to_word'
       ).required(),
       
       // Common parameters
@@ -185,7 +186,18 @@ const transformSchema = Joi.object({
           }).optional(),
           imageData: Joi.string().optional() // base64 image data
         })
-      ).optional()
+      ).optional(),
+      
+      // Convert to Word options
+      wordFormat: Joi.string().valid('docx', 'doc').optional(),
+      conversionQuality: Joi.string().valid('low', 'medium', 'high').optional(),
+      preserveLayout: Joi.boolean().optional(),
+      extractImages: Joi.boolean().optional(),
+      convertTables: Joi.boolean().optional(),
+      ocrLanguage: Joi.string().optional(),
+      includeHeaders: Joi.boolean().optional(),
+      includeFooters: Joi.boolean().optional(),
+      retainFormatting: Joi.boolean().optional()
     })
   ).min(1).required()
 });
