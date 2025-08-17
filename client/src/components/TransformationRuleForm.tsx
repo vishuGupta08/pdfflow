@@ -47,6 +47,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
   uploadedFile
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [showTransformationModal, setShowTransformationModal] = useState(false);
   
@@ -157,6 +158,46 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleImageUpload = async (ruleId: string, files: FileList) => {
+    if (!files || files.length === 0) return;
+
+    const file = files[0]; // Only handle single image file
+    const validImageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
+
+    if (!validImageTypes.includes(file.type)) {
+      alert(`${file.name} is not a supported image file. Please use PNG, JPG, JPEG, SVG, or WebP files.`);
+      return;
+    }
+
+    try {
+      const response = await ApiService.uploadImage(file);
+      if (response.success && response.data) {
+        updateRule(ruleId, { 
+          imageFile: response.data.fileId,
+          imageFileName: file.name
+        });
+      } else {
+        console.error('Image upload failed:', response.error);
+        alert(`Failed to upload ${file.name}: ${response.error}`);
+      }
+    } catch (error) {
+      console.error('Image upload error:', error);
+      alert(`Failed to upload ${file.name}`);
+    }
+
+    // Reset image input
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+  };
+
+  const triggerImageUpload = (ruleId: string) => {
+    setSelectedRuleId(ruleId);
+    if (imageInputRef.current) {
+      imageInputRef.current.click();
     }
   };
 
@@ -919,10 +960,26 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
               </label>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                 <Image className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-500 mb-2">Upload an image (PNG, JPG, SVG)</p>
-                <button type="button" className="btn-secondary">
+                <p className="text-gray-500 mb-2">Upload an image (PNG, JPG, SVG, WebP)</p>
+                {rule.imageFileName ? (
+                  <div className="mb-2">
+                    <span className="text-green-600 font-medium">✓ {rule.imageFileName}</span>
+                  </div>
+                ) : null}
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => e.target.files && selectedRuleId === rule.id && handleImageUpload(rule.id, e.target.files)}
+                />
+                <button 
+                  type="button" 
+                  className="btn-secondary"
+                  onClick={() => triggerImageUpload(rule.id)}
+                >
                   <Plus className="h-4 w-4 mr-2" />
-                  Select Image
+                  {rule.imageFileName ? 'Change Image' : 'Select Image'}
                 </button>
               </div>
             </div>

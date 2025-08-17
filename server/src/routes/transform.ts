@@ -70,6 +70,7 @@ const transformSchema = Joi.object({
       
       // Image options
       imageFile: Joi.string().optional(),
+      imageFileName: Joi.string().optional(),
       imageWidth: Joi.number().min(1).optional(),
       imageHeight: Joi.number().min(1).optional(),
       maintainAspectRatio: Joi.boolean().optional(),
@@ -261,6 +262,22 @@ router.post('/', async (req: Request, res: Response) => {
           }
         }
         
+        // Handle image file mapping for add_image transformations
+        if (t.type === 'add_image' && t.imageFileName) {
+          // Find the uploaded image file by filename
+          for (const [fileId, uploadedFile] of uploadedFiles.entries()) {
+            if (uploadedFile.originalName === t.imageFileName) {
+              mapped.imageFile = uploadedFile.path;
+              console.log(`🖼️ Found image file: ${t.imageFileName} -> ${uploadedFile.path}`);
+              break;
+            }
+          }
+          
+          if (!mapped.imageFile) {
+            console.warn(`⚠️ Image file not found: ${t.imageFileName}`);
+          }
+        }
+        
         // Map compression level field
         if (t.level && !t.compressionLevel) {
           mapped.compressionLevel = t.level;
@@ -393,7 +410,26 @@ router.post('/preview', async (req: Request, res: Response) => {
           ...t
         };
       }
-      return t;
+      
+      const mapped = { ...t };
+      
+      // Handle image file mapping for add_image transformations
+      if (t.type === 'add_image' && t.imageFileName) {
+        // Find the uploaded image file by filename
+        for (const [fileId, uploadedFile] of uploadedFiles.entries()) {
+          if (uploadedFile.originalName === t.imageFileName) {
+            mapped.imageFile = uploadedFile.path;
+            console.log(`🖼️ Preview: Found image file: ${t.imageFileName} -> ${uploadedFile.path}`);
+            break;
+          }
+        }
+        
+        if (!mapped.imageFile) {
+          console.warn(`⚠️ Preview: Image file not found: ${t.imageFileName}`);
+        }
+      }
+      
+      return mapped;
     });
 
     console.log('Mapped transformations for preview:', mappedTransformations);

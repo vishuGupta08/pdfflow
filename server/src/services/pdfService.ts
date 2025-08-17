@@ -1232,63 +1232,121 @@ export class PDFService {
       throw new Error('Image file is required');
     }
 
-    console.log(`🖼️ Adding image at position: ${position}`);
+    if (!fs.existsSync(imageFile)) {
+      throw new Error(`Image file not found: ${imageFile}`);
+    }
+
+    console.log(`🖼️ Adding image from: ${imageFile} at position: ${position}`);
     
-    // In a real implementation, you would:
-    // 1. Load the image from file or base64
-    // 2. Embed it in the PDF document
-    // 3. Calculate proper positioning and sizing
-    // 4. Add to specified pages
-    
-    const pages = pdfDoc.getPages();
-    
-    for (const page of pages) {
-      const { width: pageWidth, height: pageHeight } = page.getSize();
+    try {
+      // Read image file
+      const imageBytes = fs.readFileSync(imageFile);
       
-      // Calculate position
-      let x = pageWidth / 2;
-      let y = pageHeight / 2;
+      // Determine image type based on file extension
+      const ext = path.extname(imageFile).toLowerCase();
+      let embeddedImage;
       
-      switch (position) {
-        case 'top-left':
-          x = 50;
-          y = pageHeight - 50;
-          break;
-        case 'top-center':
-          x = pageWidth / 2;
-          y = pageHeight - 50;
-          break;
-        case 'top-right':
-          x = pageWidth - 50;
-          y = pageHeight - 50;
-          break;
-        case 'center-left':
-          x = 50;
-          y = pageHeight / 2;
-          break;
-        case 'center-right':
-          x = pageWidth - 50;
-          y = pageHeight / 2;
-          break;
-        case 'bottom-left':
-          x = 50;
-          y = 50;
-          break;
-        case 'bottom-center':
-          x = pageWidth / 2;
-          y = 50;
-          break;
-        case 'bottom-right':
-          x = pageWidth - 50;
-          y = 50;
-          break;
-        default: // center
-          x = pageWidth / 2;
-          y = pageHeight / 2;
+      if (ext === '.png') {
+        embeddedImage = await pdfDoc.embedPng(imageBytes);
+      } else if (ext === '.jpg' || ext === '.jpeg') {
+        embeddedImage = await pdfDoc.embedJpg(imageBytes);
+      } else {
+        throw new Error(`Unsupported image format: ${ext}. Only PNG and JPG/JPEG are supported.`);
       }
       
-      // Placeholder: In real implementation, you would draw the actual image
-      console.log(`📍 Image would be placed at (${x}, ${y}) with size ${width}x${height}`);
+      const pages = pdfDoc.getPages();
+      
+      for (const page of pages) {
+        const { width: pageWidth, height: pageHeight } = page.getSize();
+        
+        // Get image dimensions
+        const imageDims = embeddedImage.size();
+        let imageWidth = width || imageDims.width;
+        let imageHeight = height || imageDims.height;
+        
+        // Maintain aspect ratio if requested and only one dimension is specified
+        if (maintainAspectRatio) {
+          const aspectRatio = imageDims.width / imageDims.height;
+          
+          if (width && !height) {
+            imageHeight = width / aspectRatio;
+          } else if (height && !width) {
+            imageWidth = height * aspectRatio;
+          } else if (!width && !height) {
+            // Default size: scale down if too large
+            const maxWidth = pageWidth * 0.8;
+            const maxHeight = pageHeight * 0.8;
+            
+            if (imageDims.width > maxWidth || imageDims.height > maxHeight) {
+              const widthRatio = maxWidth / imageDims.width;
+              const heightRatio = maxHeight / imageDims.height;
+              const scale = Math.min(widthRatio, heightRatio);
+              
+              imageWidth = imageDims.width * scale;
+              imageHeight = imageDims.height * scale;
+            }
+          }
+        }
+        
+        // Calculate position
+        let x = (pageWidth - imageWidth) / 2;
+        let y = (pageHeight - imageHeight) / 2;
+        
+        switch (position) {
+          case 'top-left':
+            x = 50;
+            y = pageHeight - imageHeight - 50;
+            break;
+          case 'top-center':
+            x = (pageWidth - imageWidth) / 2;
+            y = pageHeight - imageHeight - 50;
+            break;
+          case 'top-right':
+            x = pageWidth - imageWidth - 50;
+            y = pageHeight - imageHeight - 50;
+            break;
+          case 'center-left':
+            x = 50;
+            y = (pageHeight - imageHeight) / 2;
+            break;
+          case 'center-right':
+            x = pageWidth - imageWidth - 50;
+            y = (pageHeight - imageHeight) / 2;
+            break;
+          case 'bottom-left':
+            x = 50;
+            y = 50;
+            break;
+          case 'bottom-center':
+            x = (pageWidth - imageWidth) / 2;
+            y = 50;
+            break;
+          case 'bottom-right':
+            x = pageWidth - imageWidth - 50;
+            y = 50;
+            break;
+          default: // center
+            x = (pageWidth - imageWidth) / 2;
+            y = (pageHeight - imageHeight) / 2;
+        }
+        
+        // Draw the image
+        page.drawImage(embeddedImage, {
+          x,
+          y,
+          width: imageWidth,
+          height: imageHeight,
+          opacity
+        });
+        
+        console.log(`📍 Image placed at (${x}, ${y}) with size ${imageWidth}x${imageHeight}`);
+      }
+      
+      console.log(`✅ Successfully added image to ${pages.length} pages`);
+      
+    } catch (error) {
+      console.error(`❌ Failed to add image: ${error}`);
+      throw new Error(`Failed to add image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

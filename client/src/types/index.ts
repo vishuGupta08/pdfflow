@@ -24,6 +24,7 @@ export interface TransformationRule {
   
   // Image options
   imageFile?: string; // File ID or base64
+  imageFileName?: string; // Original filename for display
   imageWidth?: number;
   imageHeight?: number;
   maintainAspectRatio?: boolean;

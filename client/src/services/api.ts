@@ -225,6 +225,18 @@ export class ApiService {
     return handleApiResponse<UploadedFile>(response);
   }
 
+  static async uploadImage(file: File): Promise<ExtendedApiResponse<UploadedFile>> {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await fetch(`${API_BASE_URL}/upload/image`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    return handleApiResponse<UploadedFile>(response);
+  }
+
   static async uploadFileWithProgress(
     file: File, 
     onProgress: (progress: UploadProgress) => void,

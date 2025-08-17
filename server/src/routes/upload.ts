@@ -1,5 +1,5 @@
 import express from 'express';
-import { upload } from '../config/multer';
+import { upload, uploadImage } from '../config/multer';
 import { v4 as uuidv4 } from 'uuid';
 import { UploadedFile } from '../types';
 import fs from 'fs';
@@ -121,6 +121,63 @@ router.get('/preview/:fileId', (req, res) => {
     console.error('Preview error:', error);
     res.status(500).json({ error: 'Failed to serve preview' });
   }
+});
+
+// Image upload endpoint
+router.post('/image', (req, res, next) => {
+  uploadImage.single('image')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          success: false,
+          error: 'Image too large. Maximum size is 10MB'
+        });
+      }
+      if (err.message === 'Only image files (PNG, JPG, JPEG, WebP, SVG) are allowed') {
+        return res.status(400).json({
+          success: false,
+          error: 'Only image files (PNG, JPG, JPEG, WebP, SVG) are allowed'
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        error: 'Image upload failed'
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No image uploaded'
+      });
+    }
+
+    const fileId = uuidv4();
+    const uploadedFile: UploadedFile = {
+      id: fileId,
+      originalName: req.file.originalname,
+      filename: req.file.filename,
+      path: req.file.path,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      uploadedAt: new Date()
+    };
+
+    uploadedFiles.set(fileId, uploadedFile);
+
+    console.log(`📷 Image uploaded: ${req.file.originalname} (${req.file.size} bytes)`);
+
+    res.json({
+      success: true,
+      message: 'Image uploaded successfully',
+      data: {
+        fileId,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      }
+    });
+  });
 });
 
 export { uploadedFiles };
