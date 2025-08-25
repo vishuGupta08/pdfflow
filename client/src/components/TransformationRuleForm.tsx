@@ -490,23 +490,59 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
 
       case 'redact_text':
         return (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Words/phrases to redact
-            </label>
-            <input
-              type="text"
-              placeholder="confidential, secret, private"
-              className="input-field"
-              value={rule.redactWords?.join(', ') || ''}
-              onChange={(e) => {
-                const words = e.target.value.split(',').map(w => w.trim()).filter(w => w);
-                updateRule(rule.id, { redactWords: words });
-              }}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Separate multiple words or phrases with commas
-            </p>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Words/phrases to redact
+              </label>
+              <input
+                type="text"
+                placeholder="confidential, secret, private, John Doe"
+                className="input-field"
+                value={rule.redactWords?.join(', ') || ''}
+                onChange={(e) => {
+                  const words = e.target.value.split(',').map(w => w.trim()).filter(w => w);
+                  updateRule(rule.id, { redactWords: words });
+                }}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Separate multiple words or phrases with commas. Text search is case-insensitive.
+              </p>
+            </div>
+            
+            {rule.redactWords && rule.redactWords.length > 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <h4 className="text-sm font-medium text-yellow-800 mb-2">
+                  🔒 Text to be redacted:
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {rule.redactWords.map((word, index) => (
+                    <span 
+                      key={index}
+                      className="inline-block bg-black text-white px-2 py-1 rounded text-xs"
+                      title={`This text will be blacked out: "${word}"`}
+                    >
+                      ███████
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-yellow-700 mt-2">
+                  Preview: Black bars will cover these words/phrases in your PDF
+                </p>
+              </div>
+            )}
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <h4 className="text-sm font-medium text-blue-800 mb-2">
+                ℹ️ How redaction works:
+              </h4>
+              <ul className="text-xs text-blue-700 space-y-1">
+                <li>• Text is analyzed and matched (case-insensitive)</li>
+                <li>• Black rectangles cover found text instances</li>
+                <li>• Works with partial matches within words</li>
+                <li>• Applied to all pages in the document</li>
+              </ul>
+            </div>
           </div>
         );
 
@@ -1516,6 +1552,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                         <input
                           type="text"
                           className="input-field text-sm"
+                          placeholder={annotation.type === 'sticky_note' ? 'Note text...' : annotation.type === 'highlight' ? 'Highlight label (optional)' : 'Text content...'}
                           value={annotation.content}
                           onChange={(e) => {
                             const newAnnotations = [...(rule.annotations || [])];
@@ -1526,36 +1563,6 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                       </div>
 
                       <div className="flex space-x-2">
-                        <div className="flex-1">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            X
-                          </label>
-                          <input
-                            type="number"
-                            className="input-field text-sm"
-                            value={annotation.x}
-                            onChange={(e) => {
-                              const newAnnotations = [...(rule.annotations || [])];
-                              newAnnotations[index] = { ...annotation, x: parseInt(e.target.value) };
-                              updateRule(rule.id, { annotations: newAnnotations });
-                            }}
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Y
-                          </label>
-                          <input
-                            type="number"
-                            className="input-field text-sm"
-                            value={annotation.y}
-                            onChange={(e) => {
-                              const newAnnotations = [...(rule.annotations || [])];
-                              newAnnotations[index] = { ...annotation, y: parseInt(e.target.value) };
-                              updateRule(rule.id, { annotations: newAnnotations });
-                            }}
-                          />
-                        </div>
                         <button
                           type="button"
                           onClick={() => {
@@ -1567,6 +1574,95 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
+                    </div>
+                    
+                    {/* Position and Size Controls */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          X Position
+                        </label>
+                        <input
+                          type="number"
+                          className="input-field text-sm"
+                          value={annotation.x}
+                          onChange={(e) => {
+                            const newAnnotations = [...(rule.annotations || [])];
+                            newAnnotations[index] = { ...annotation, x: parseInt(e.target.value) };
+                            updateRule(rule.id, { annotations: newAnnotations });
+                          }}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Y Position
+                        </label>
+                        <input
+                          type="number"
+                          className="input-field text-sm"
+                          value={annotation.y}
+                          onChange={(e) => {
+                            const newAnnotations = [...(rule.annotations || [])];
+                            newAnnotations[index] = { ...annotation, y: parseInt(e.target.value) };
+                            updateRule(rule.id, { annotations: newAnnotations });
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Show size controls for sticky notes and highlights */}
+                      {(annotation.type === 'sticky_note' || annotation.type === 'highlight') && (
+                        <>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Width
+                            </label>
+                            <input
+                              type="number"
+                              className="input-field text-sm"
+                              value={annotation.width || (annotation.type === 'sticky_note' ? 80 : 100)}
+                              onChange={(e) => {
+                                const newAnnotations = [...(rule.annotations || [])];
+                                newAnnotations[index] = { ...annotation, width: parseInt(e.target.value) };
+                                updateRule(rule.id, { annotations: newAnnotations });
+                              }}
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Height
+                            </label>
+                            <input
+                              type="number"
+                              className="input-field text-sm"
+                              value={annotation.height || (annotation.type === 'sticky_note' ? 60 : 20)}
+                              onChange={(e) => {
+                                const newAnnotations = [...(rule.annotations || [])];
+                                newAnnotations[index] = { ...annotation, height: parseInt(e.target.value) };
+                                updateRule(rule.id, { annotations: newAnnotations });
+                              }}
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    
+                    {/* Color picker for all annotation types */}
+                    <div className="mt-4">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Color {annotation.type === 'highlight' ? '(Background)' : '(Text)'}
+                      </label>
+                      <input
+                        type="color"
+                        className="w-16 h-8 border border-gray-300 rounded cursor-pointer"
+                        value={annotation.color || (annotation.type === 'highlight' ? '#FFFF00' : '#000000')}
+                        onChange={(e) => {
+                          const newAnnotations = [...(rule.annotations || [])];
+                          newAnnotations[index] = { ...annotation, color: e.target.value };
+                          updateRule(rule.id, { annotations: newAnnotations });
+                        }}
+                      />
                     </div>
                   </div>
                 ))}

@@ -7,6 +7,7 @@ import { PDFEditor, PDFEdit } from './components/PDFEditor'
 import { AuthModal } from './components/AuthModal'
 import FeedbackModal from './components/FeedbackModal'
 import FloatingFeedbackButton from './components/FloatingFeedbackButton'
+import { SEO, SEOConfigs } from './components/SEO'
 import { transformPDF, editPDF, ApiService, TransformResult } from './services/api'
 import { useAuth } from './contexts/AuthContext'
 import type { TransformationRule, UploadedFile } from './types'
@@ -273,8 +274,41 @@ function App() {
     return 'pending'
   }
 
+  // Dynamic SEO configuration based on current state
+  const getSEOConfig = () => {
+    // If user is working with specific transformations, show relevant SEO
+    if (transformationRules.length > 0) {
+      const primaryTransformation = transformationRules[0]?.type
+      
+      switch (primaryTransformation) {
+        case 'merge_pdfs':
+          return SEOConfigs.merge
+        case 'split_pdf':
+          return SEOConfigs.split
+        case 'compress':
+          return SEOConfigs.compress
+        case 'convert_to_word':
+          return SEOConfigs.convert
+        case 'add_watermark':
+          return SEOConfigs.watermark
+        default:
+          return SEOConfigs.editor
+      }
+    }
+    
+    // If in editor mode
+    if (showEditor) {
+      return SEOConfigs.editor
+    }
+    
+    // Default homepage SEO
+    return SEOConfigs.homepage
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-teal-100 animate-gradient">
+      <SEO {...getSEOConfig()} />
+      
       {/* Header */}
       <header className="sticky top-0 z-40 glass border-b border-white/20 animate-fade-in-down">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

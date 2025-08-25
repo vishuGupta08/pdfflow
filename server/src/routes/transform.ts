@@ -20,7 +20,7 @@ const transformSchema = Joi.object({
         'remove_pages', 'rotate_pages', 'add_watermark', 'merge_pdfs', 
         'compress', 'redact_text', 'add_page_numbers', 'rearrange_pages', 'extract_pages',
         'split_pdf', 'add_image', 'add_header_footer', 'add_blank_pages', 'crop_pages', 
-        'add_background', 'text_annotation', 'add_border', 'resize_pages', 'password_protect', 
+        'add_background', 'text_annotation', 'add_text_annotation', 'add_border', 'resize_pages', 'password_protect', 
         'remove_password', 'text-replace', 'watermark', 'extract-pages', 'edit_pdf',
         'convert_to_word'
       ).required(),

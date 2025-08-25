@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+
+# Block access to uploaded files and temporary content
+Disallow: /uploads/
+Disallow: /temp/
+Disallow: /api/
+Disallow: /admin/
+
+# Allow access to static assets
+Allow: /assets/
+Allow: /images/
+Allow: /*.css
+Allow: /*.js
+
+# Sitemap location
+Sitemap: https://www.pdfclinic.org/sitemap.xml
+
+# Crawl-delay for respectful crawling
+Crawl-delay: 1
