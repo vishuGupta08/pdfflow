@@ -36,7 +36,7 @@ interface PDFEditorProps {
 
 export interface PDFEdit {
   id: string;
-  type: 'text' | 'image' | 'highlight' | 'note' | 'shape' | 'arrow' | 'redaction';
+  type: 'text' | 'image' | 'highlight' | 'note' | 'shape' | 'arrow';
   page: number;
   x: number;
   y: number;
@@ -300,18 +300,6 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({
           backgroundColor: 'transparent'
         }
       });
-    } else if (currentTool === 'redaction') {
-      addEdit({
-        type: 'redaction',
-        page: pageNumber,
-        x: Math.min(startPosition.x, x),
-        y: Math.min(startPosition.y, y),
-        width: Math.abs(x - startPosition.x),
-        height: Math.abs(y - startPosition.y),
-        style: {
-          backgroundColor: '#000000'
-        }
-      });
     }
     
     setIsDrawing(false);
@@ -432,20 +420,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({
       );
     }
 
-    if (edit.type === 'redaction') {
-      return (
-        <div
-          key={edit.id}
-          style={{
-            ...baseStyle,
-            width: (edit.width || 0) * scale,
-            height: (edit.height || 0) * scale,
-            backgroundColor: '#000000'
-          }}
-          onClick={() => setSelectedEdit(edit.id)}
-        />
-      );
-    }
+    // ...existing code...
 
     if (edit.type === 'image' && edit.imageData) {
       return (
@@ -550,13 +525,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({
             >
               <Square className="h-5 w-5" />
             </button>
-            <button
-              onClick={() => setCurrentTool('redaction')}
-              className={`p-2 rounded ${currentTool === 'redaction' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-              title="Redaction"
-            >
-              <Circle className="h-5 w-5" />
-            </button>
+            {/* Redaction tool removed */}
             <div className="border-t border-gray-600 w-8 my-2"></div>
             <button
               onClick={undo}

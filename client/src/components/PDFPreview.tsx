@@ -1,3 +1,6 @@
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002/api';
+
 import { useState, useCallback, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut, RotateCw, X, RefreshCw } from 'lucide-react';
@@ -18,9 +21,6 @@ interface PDFPreviewProps {
   showOriginal?: boolean;
 }
 
-// Get API base URL from environment variables
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002/api';
-
 export const PDFPreview: React.FC<PDFPreviewProps> = ({
   fileId,
   fileName,
@@ -36,15 +36,16 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState<boolean>(false);
   const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
+  const [showOriginalState, setShowOriginalState] = useState<boolean>(showOriginal);
 
   // Determine which URL to use for the PDF
   const getPreviewUrl = useCallback(() => {
     console.log('🔗 getPreviewUrl called:');
-    console.log('  - showOriginal:', showOriginal);
+    console.log('  - showOriginalState:', showOriginalState);
     console.log('  - transformations.length:', transformations.length);
     console.log('  - livePreviewUrl:', livePreviewUrl);
     
-    if (showOriginal || transformations.length === 0) {
+    if (showOriginalState || transformations.length === 0) {
       // Show original uploaded file
       const originalUrl = `${API_BASE_URL}/upload/preview/${fileId}`;
       console.log('  → Using original URL:', originalUrl);
@@ -59,7 +60,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
       console.log('  → Using transformed URL:', transformedUrl);
       return transformedUrl;
     }
-  }, [fileId, showOriginal, transformations.length, livePreviewUrl]);
+  }, [fileId, showOriginalState, transformations.length, livePreviewUrl]);
 
   // Generate live preview when transformations change
   useEffect(() => {
@@ -68,7 +69,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
     console.log('  - transformations.length:', transformations.length);
     console.log('  - transformations:', transformations);
     console.log('  - fileId:', fileId);
-    
+
     if (!showOriginal && transformations.length > 0) {
       console.log('🚀 Generating live preview...');
       setIsGeneratingPreview(true);
@@ -77,23 +78,32 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
           console.log('✅ Live preview URL generated:', url);
           if (url) {
             setLivePreviewUrl(url);
+            setError(null);
+          } else {
+            setError('Failed to generate PDF preview.');
           }
         })
-        .catch((error) => {
+        .catch(async (error) => {
+          // Try to extract backend error message if available
+          let errorMsg = 'Failed to generate PDF preview.';
+          if (error && error.response) {
+            try {
+              const data = await error.response.json();
+              if (data && data.error) errorMsg = data.error + (data.details ? `: ${data.details}` : '');
+            } catch {}
+          }
+          setError(errorMsg);
           console.error('❌ Failed to generate live preview:', error);
         })
         .finally(() => {
           setIsGeneratingPreview(false);
         });
-    } else {
-      console.log('ℹ️ Not generating live preview (showOriginal or no transformations)');
-      // Clean up previous live preview URL
       if (livePreviewUrl) {
         URL.revokeObjectURL(livePreviewUrl);
         setLivePreviewUrl(null);
       }
     }
-  }, [fileId, transformations, showOriginal, livePreviewUrl]);
+  }, [fileId, transformations, showOriginalState, livePreviewUrl]);
 
   // Clean up blob URL on unmount
   useEffect(() => {
@@ -193,47 +203,35 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
                   <span className="text-sm">Generating preview...</span>
                 </div>
               )}
-              {!showOriginal && transformations.length > 0 && !isGeneratingPreview && (
+              {!showOriginalState && transformations.length > 0 && !isGeneratingPreview && (
                 <span className="text-sm text-green-600 bg-green-50 px-2 py-1 rounded">
                   Live Preview
                 </span>
               )}
             </div>
-            {fileName && (
-              <p className="text-sm text-gray-500 mt-1" title={fileName}>
-                {truncateFileName(fileName)}
-              </p>
-            )}
           </div>
-          <div className="flex items-center space-x-2">
-            {!showOriginal && transformations.length > 0 && (
-              <button
-                onClick={refreshPreview}
-                disabled={isGeneratingPreview}
-                className="btn-secondary"
-                title="Refresh preview with current transformations"
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isGeneratingPreview ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
+          <div className="flex items-center space-x-3">
+            {fileId && transformations.length > 0 && (
+              <div className="flex items-center space-x-2">
+                <label className="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={showOriginalState}
+                    onChange={(e) => setShowOriginalState(e.target.checked)}
+                    className="form-checkbox h-4 w-4 text-primary-600"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Show Original</span>
+                </label>
+              </div>
             )}
-            <button
-              onClick={onDownload}
-              className="btn-primary"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download
-            </button>
             <button
               onClick={onClose}
-              className="btn-ghost"
+              className="btn-ghost p-2 hover:bg-gray-100 rounded-full"
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5" />
             </button>
           </div>
-        </div>
-
-        {/* Toolbar */}
+        </div> {/* <-- Add this closing div for the header left section */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50">
           {/* Page Navigation */}
           <div className="flex items-center space-x-2">
@@ -357,4 +355,4 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
       </div>
     </div>
   );
-}; 
+}

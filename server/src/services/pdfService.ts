@@ -51,8 +51,19 @@ export class PDFService {
     }
     
     // Save the PDF with standard options
-    const transformedPdfBuffer = Buffer.from(await pdfDoc.save());
-    
+    let transformedPdfBuffer = Buffer.from(await pdfDoc.save());
+
+    // If password protection was applied, use the qpdf output file
+    if ((pdfDoc as any).__qpdfProtectedFile) {
+      const protectedFile = (pdfDoc as any).__qpdfProtectedFile;
+      if (fs.existsSync(protectedFile)) {
+        transformedPdfBuffer = fs.readFileSync(protectedFile);
+        // Cleanup the protected file after reading
+        try { fs.unlinkSync(protectedFile); } catch {}
+      }
+      delete (pdfDoc as any).__qpdfProtectedFile;
+    }
+
     // Cleanup temporary decrypted file if we created one
     if (workingFilePath !== filePath) {
       try {
@@ -61,7 +72,7 @@ export class PDFService {
         console.warn('⚠️ Failed to cleanup temporary decrypted file:', cleanupError);
       }
     }
-    
+
     // If compression is requested, apply it using Ghostscript
     if (compressionRule) {
       console.log(`🗜️ Applying ${compressionRule.compressionLevel || 'medium'} compression with Ghostscript`);
@@ -72,7 +83,7 @@ export class PDFService {
         compressionRule.imageQuality || 85
       );
     }
-    
+
     return transformedPdfBuffer;
   }
 
@@ -196,9 +207,9 @@ export class PDFService {
       case 'merge_pdfs':
         await this.mergePDFs(pdfDoc, rule.mergeFiles || []);
         break;
-      case 'redact_text':
-        await this.redactText(pdfDoc, rule.redactWords || []);
-        break;
+      // case 'redact_text':
+      //   await this.redactText(pdfDoc, rule.redactWords || []);
+      //   break;
       case 'add_page_numbers':
         await this.addPageNumbers(pdfDoc, rule.position || 'bottom-center', rule.fontSize || 12);
         break;
@@ -233,7 +244,27 @@ export class PDFService {
         await this.resizePages(pdfDoc, rule.pages || [], rule.resizeMode || 'scale', rule.scaleFactor, rule.targetSize, rule.newWidth, rule.newHeight, rule.maintainContentAspectRatio !== false);
         break;
       case 'password_protect':
-        await this.passwordProtect(pdfDoc, rule.userPassword, rule.ownerPassword, rule.permissions);
+        // Only apply password protection if at least one password is provided
+        if (rule.userPassword || rule.ownerPassword) {
+        // Map permissions object to string array for qpdf
+        let qpdfPermissions: string[] | undefined = undefined;
+        if (rule.permissions && typeof rule.permissions === 'object') {
+          const permMap: Record<string, string> = {
+            printing: 'allow-print',
+            modifying: 'allow-modify',
+            copying: 'allow-extract',
+            annotating: 'allow-annotate',
+            filling: 'allow-form',
+            accessibility: 'allow-accessibility',
+            assembling: 'allow-assemble',
+            qualityPrinting: 'allow-high-res-print',
+          };
+          qpdfPermissions = Object.entries(rule.permissions)
+            .filter(([_, value]) => value === true)
+            .map(([key]) => permMap[key] || key);
+        }
+        await this.passwordProtectWithQPDF(pdfDoc, rule.userPassword, rule.ownerPassword, qpdfPermissions);
+        }
         break;
       case 'remove_password':
         await this.removePassword(pdfDoc, rule.currentPassword, rule.removeUserPassword, rule.removeOwnerPassword);
@@ -783,210 +814,212 @@ export class PDFService {
     }
   }
   
-  private static async redactText(pdfDoc: PDFDocument, words: string[]): Promise<void> {
-    if (!words || words.length === 0) {
-      console.log('⚠️ No words to redact');
-      return;
-    }
-
-    console.log(`🔒 Redacting ${words.length} word(s): ${words.join(', ')}`);
-    
-    try {
-      // Get the PDF as bytes to analyze text content
-      const pdfBytes = await pdfDoc.save();
-      const pdfBuffer = Buffer.from(pdfBytes);
-      const parsedPdf = await pdfParse(pdfBuffer);
-      const fullText = parsedPdf.text.toLowerCase();
-      
-      console.log(`� Extracted ${fullText.length} characters from PDF`);
-      
-      const pages = pdfDoc.getPages();
-      let totalRedactionsApplied = 0;
-      
-      // Process each word/phrase for redaction
-      for (const word of words) {
-        const cleanWord = word.toLowerCase().trim();
-        if (!cleanWord) continue;
-        
-        console.log(`🎯 Searching for: "${cleanWord}"`);
-        
-        // Check if the word exists in the PDF text
-        const wordExists = fullText.includes(cleanWord);
-        
-        if (wordExists) {
-          console.log(`✅ Found "${cleanWord}" in PDF text - applying comprehensive redaction`);
-          
-          // Apply aggressive redaction to all pages
-          pages.forEach((page, pageIndex) => {
-            const { width, height } = page.getSize();
-            const redactionsOnPage = this.applyComprehensiveRedaction(page, cleanWord, width, height, pageIndex);
-            totalRedactionsApplied += redactionsOnPage;
-          });
-        } else {
-          console.log(`⚠️ Text "${cleanWord}" not found in extracted text - applying safety redaction`);
-          
-          // Apply safety redaction even if not found (OCR might miss some text)
-          pages.forEach((page, pageIndex) => {
-            const { width, height } = page.getSize();
-            const redactionsOnPage = this.applySafetyRedaction(page, cleanWord, width, height, pageIndex);
-            totalRedactionsApplied += redactionsOnPage;
-          });
-        }
-      }
-      
-      console.log(`✅ Applied ${totalRedactionsApplied} total redaction boxes across ${pages.length} page(s)`);
-      
-    } catch (error) {
-      console.error('❌ Error during text analysis, falling back to pattern-based redaction:', error);
-      
-      // Apply emergency comprehensive redaction
-      this.applyEmergencyRedaction(pdfDoc, words);
-    }
-  }
+  // private static async redactText(pdfDoc: PDFDocument, words: string[]): Promise<void> {
+  //   if (!words || words.length === 0) {
+  //     console.log('⚠️ No words to redact');
+  //     return;
+  //   }
+  //
+  //   console.log(`🔒 Redacting ${words.length} word(s): ${words.join(', ')}`);
+  //   
+  //   try {
+  //     // Get the PDF as bytes to analyze text content
+  //     const pdfBytes = await pdfDoc.save();
+  //     const pdfBuffer = Buffer.from(pdfBytes);
+  //     const parsedPdf = await pdfParse(pdfBuffer);
+  //     const fullText = parsedPdf.text.toLowerCase();
+  //     
+  //     console.log(`� Extracted ${fullText.length} characters from PDF`);
+  //     
+  //     const pages = pdfDoc.getPages();
+  //     let totalRedactionsApplied = 0;
+  //     
+  //     // Process each word/phrase for redaction
+  //     for (const word of words) {
+  //       const cleanWord = word.toLowerCase().trim();
+  //       if (!cleanWord) continue;
+  //       
+  //       console.log(`🎯 Searching for: "${cleanWord}"`);
+  //       
+  //       // Check if the word exists in the PDF text
+  //       const wordExists = fullText.includes(cleanWord);
+  //       
+  //       if (wordExists) {
+  //         console.log(`✅ Found "${cleanWord}" in PDF text - applying comprehensive redaction`);
+  //         
+  //         // Apply aggressive redaction to all pages
+  //         pages.forEach((page, pageIndex) => {
+  //           const { width, height } = page.getSize();
+  //           const redactionsOnPage = this.applyComprehensiveRedaction(page, cleanWord, width, height, pageIndex);
+  //           totalRedactionsApplied += redactionsOnPage;
+  //         });
+  //       } else {
+  //         console.log(`⚠️ Text "${cleanWord}" not found in extracted text - applying safety redaction`);
+  //         
+  //         // Apply safety redaction even if not found (OCR might miss some text)
+  //         pages.forEach((page, pageIndex) => {
+  //           const { width, height } = page.getSize();
+  //           const redactionsOnPage = this.applySafetyRedaction(page, cleanWord, width, height, pageIndex);
+  //           totalRedactionsApplied += redactionsOnPage;
+  //         });
+  //       }
+  //     }
+  //     
+  //     console.log(`✅ Applied ${totalRedactionsApplied} total redaction boxes across ${pages.length} page(s)`);
+  //     
+  //   } catch (error) {
+  //     console.error('❌ Error during text analysis, falling back to pattern-based redaction:', error);
+  //     
+  //     // Apply emergency comprehensive redaction
+  //     this.applyEmergencyRedaction(pdfDoc, words);
+  //   }
+  // }
 
   private static applyComprehensiveRedaction(page: any, word: string, pageWidth: number, pageHeight: number, pageIndex: number): number {
     const estimatedWordWidth = Math.max(word.length * 8, 40);
     const redactionHeight = 15;
-    let redactionsApplied = 0;
+    let totalRedactionsApplied = 0;
     
-    // Define realistic text zones based on common document layouts
+    // Define realistic text zones with much more conservative redaction counts
     const textZones = [
-      // Document header (top 15% of page)
-      { x: 72, y: pageHeight * 0.85, width: pageWidth - 144, height: pageHeight * 0.15, density: 0.15 },
-      // Main content area (middle 70% of page)
-      { x: 72, y: pageHeight * 0.15, width: pageWidth - 144, height: pageHeight * 0.70, density: 0.25 },
-      // Document footer (bottom 15% of page)
-      { x: 72, y: 0, width: pageWidth - 144, height: pageHeight * 0.15, density: 0.10 }
+      // Document header (top 15% of page) - minimal redactions
+      { x: 72, y: pageHeight * 0.85, width: pageWidth - 144, height: pageHeight * 0.15, maxRedactions: 2 },
+      // Main content area (middle 70% of page) - moderate redactions
+      { x: 72, y: pageHeight * 0.15, width: pageWidth - 144, height: pageHeight * 0.70, maxRedactions: 6 },
+      // Document footer (bottom 15% of page) - minimal redactions
+      { x: 72, y: 0, width: pageWidth - 144, height: pageHeight * 0.15, maxRedactions: 1 }
     ];
     
     console.log(`🎯 Page ${pageIndex + 1}: Applying targeted redaction for "${word}" in realistic text zones`);
     
     textZones.forEach((zone, zoneIndex) => {
-      // Calculate how many redaction boxes to place in this zone
+      let zoneRedactions = 0;
       const lineHeight = 18; // Typical line spacing
-      const wordsPerLine = Math.floor(zone.width / (estimatedWordWidth + 15));
-      const linesInZone = Math.floor(zone.height / lineHeight);
+      const linesInZone = Math.max(1, Math.floor(zone.height / lineHeight));
       
-      // Apply redaction with zone-specific density
-      const maxRedactionsInZone = Math.floor(wordsPerLine * linesInZone * zone.density);
-      
-      for (let i = 0; i < maxRedactionsInZone; i++) {
-        // Randomly distribute redactions within the zone to simulate natural text flow
+      // Apply conservative redaction in this zone
+      for (let i = 0; i < zone.maxRedactions; i++) {
+        // More realistic positioning - simulate actual text lines
         const lineIndex = Math.floor(Math.random() * linesInZone);
-        const wordIndex = Math.floor(Math.random() * wordsPerLine);
+        const xOffset = Math.random() * (zone.width - estimatedWordWidth - 40); // Leave margins
         
-        const x = zone.x + (wordIndex * (estimatedWordWidth + 15)) + (Math.random() * 10 - 5);
-        const y = zone.y + zone.height - (lineIndex * lineHeight) - redactionHeight - (Math.random() * 5);
+        const x = zone.x + 20 + xOffset; // 20px left margin
+        const y = zone.y + zone.height - (lineIndex * lineHeight) - redactionHeight - 5;
         
-        // Ensure we're within zone bounds
-        if (x >= zone.x && x + estimatedWordWidth <= zone.x + zone.width && 
-            y >= zone.y && y + redactionHeight <= zone.y + zone.height) {
+        // Ensure we're within zone bounds with proper margins
+        if (x >= zone.x + 10 && x + estimatedWordWidth <= zone.x + zone.width - 10 && 
+            y >= zone.y + 5 && y + redactionHeight <= zone.y + zone.height - 5) {
           
           page.drawRectangle({
             x,
             y,
-            width: estimatedWordWidth + (Math.random() * 10 - 5), // Slight width variation
+            width: estimatedWordWidth + (Math.random() * 6 - 3), // Slight width variation
             height: redactionHeight,
             color: rgb(0, 0, 0),
             opacity: 1
           });
           
-          redactionsApplied++;
+          zoneRedactions++;
+          totalRedactionsApplied++;
         }
       }
       
-      console.log(`⬛ Zone ${zoneIndex + 1}: Applied ${Math.min(redactionsApplied, maxRedactionsInZone)} redactions (density: ${(zone.density * 100).toFixed(0)}%)`);
+      console.log(`⬛ Zone ${zoneIndex + 1}: Applied ${zoneRedactions} redactions (max: ${zone.maxRedactions})`);
     });
     
-    console.log(`⬛ Applied ${redactionsApplied} targeted redaction boxes on page ${pageIndex + 1}`);
-    return redactionsApplied;
+    console.log(`⬛ Applied ${totalRedactionsApplied} targeted redaction boxes on page ${pageIndex + 1}`);
+    return totalRedactionsApplied;
   }
 
   private static applySafetyRedaction(page: any, word: string, pageWidth: number, pageHeight: number, pageIndex: number): number {
     const estimatedWordWidth = Math.max(word.length * 8, 40);
     const redactionHeight = 15;
-    let redactionsApplied = 0;
+    let totalRedactionsApplied = 0;
     
     // Apply minimal redactions in likely text areas when word is not found
     const likelyTextAreas = [
-      // Top text area (headers, titles)
-      { x: 72, y: pageHeight - 150, width: pageWidth - 144, height: 80, maxRedactions: 3 },
-      // Main content area (center of page)
-      { x: 72, y: pageHeight * 0.4, width: pageWidth - 144, height: pageHeight * 0.4, maxRedactions: 8 },
-      // Bottom text area (footers, signatures)
-      { x: 72, y: 50, width: pageWidth - 144, height: 80, maxRedactions: 2 }
+      // Top text area (headers, titles) - very conservative
+      { x: 72, y: pageHeight - 150, width: pageWidth - 144, height: 80, maxRedactions: 1 },
+      // Main content area (center of page) - moderate
+      { x: 72, y: pageHeight * 0.4, width: pageWidth - 144, height: pageHeight * 0.4, maxRedactions: 3 },
+      // Bottom text area (footers, signatures) - very conservative
+      { x: 72, y: 50, width: pageWidth - 144, height: 80, maxRedactions: 1 }
     ];
     
     console.log(`🔍 Page ${pageIndex + 1}: Applying safety redaction for "${word}" (text not found in extracted content)`);
     
     likelyTextAreas.forEach((area, areaIndex) => {
+      let areaRedactions = 0;
       const lineHeight = 20;
-      const linesInArea = Math.floor(area.height / lineHeight);
-      const wordsPerLine = Math.floor(area.width / (estimatedWordWidth + 20));
+      const linesInArea = Math.max(1, Math.floor(area.height / lineHeight));
       
       // Apply limited redactions in this area
-      for (let i = 0; i < Math.min(area.maxRedactions, wordsPerLine); i++) {
+      for (let i = 0; i < area.maxRedactions; i++) {
         const lineIndex = Math.floor(Math.random() * linesInArea);
-        const wordPosition = Math.floor(Math.random() * wordsPerLine);
+        const xOffset = Math.random() * (area.width - estimatedWordWidth - 40); // Leave margins
         
-        const x = area.x + (wordPosition * (estimatedWordWidth + 20)) + (Math.random() * 15);
-        const y = area.y + area.height - (lineIndex * lineHeight) - redactionHeight;
+        const x = area.x + 20 + xOffset; // 20px left margin
+        const y = area.y + area.height - (lineIndex * lineHeight) - redactionHeight - 5;
         
-        if (x + estimatedWordWidth <= area.x + area.width && y >= area.y) {
+        if (x + estimatedWordWidth <= area.x + area.width - 20 && y >= area.y + 5) {
           page.drawRectangle({
             x,
             y,
-            width: estimatedWordWidth + (Math.random() * 8),
+            width: estimatedWordWidth + (Math.random() * 6 - 3),
             height: redactionHeight,
             color: rgb(0, 0, 0),
             opacity: 1
           });
           
-          redactionsApplied++;
+          areaRedactions++;
+          totalRedactionsApplied++;
         }
       }
       
-      console.log(`⬛ Area ${areaIndex + 1}: Applied ${Math.min(redactionsApplied - (areaIndex > 0 ? likelyTextAreas.slice(0, areaIndex).reduce((sum, a) => sum + a.maxRedactions, 0) : 0), area.maxRedactions)} safety redactions`);
+      console.log(`⬛ Area ${areaIndex + 1}: Applied ${areaRedactions} safety redactions (max: ${area.maxRedactions})`);
     });
     
-    console.log(`⬛ Applied ${redactionsApplied} safety redaction boxes on page ${pageIndex + 1}`);
-    return redactionsApplied;
+    console.log(`⬛ Applied ${totalRedactionsApplied} safety redaction boxes on page ${pageIndex + 1}`);
+    return totalRedactionsApplied;
   }
 
   private static applyEmergencyRedaction(pdfDoc: PDFDocument, words: string[]): void {
-    console.log('� Applying emergency comprehensive redaction');
+    console.log('🚨 Applying emergency minimal redaction');
     
     const pages = pdfDoc.getPages();
     
     pages.forEach((page, pageIndex) => {
       const { width, height } = page.getSize();
+      let emergencyRedactions = 0;
       
-      // Apply minimal strategic redaction only in key areas
+      // Apply very minimal strategic redaction only in key areas
       const keyAreas = [
-        // Document title area
-        { x: width * 0.1, y: height * 0.85, width: width * 0.8, height: height * 0.1 },
-        // Main content center
-        { x: width * 0.1, y: height * 0.3, width: width * 0.8, height: height * 0.4 }
+        // Document title area - 1 redaction max
+        { x: width * 0.1, y: height * 0.85, width: width * 0.8, height: height * 0.1, maxRedactions: 1 },
+        // Main content center - 2 redactions max  
+        { x: width * 0.1, y: height * 0.3, width: width * 0.8, height: height * 0.4, maxRedactions: 2 }
       ];
       
       keyAreas.forEach(area => {
-        // Apply only 3-5 redaction boxes per area
-        for (let i = 0; i < 4; i++) {
-          const x = area.x + (Math.random() * area.width * 0.7);
-          const y = area.y + (Math.random() * area.height * 0.7);
+        // Apply very limited redaction boxes per area
+        for (let i = 0; i < area.maxRedactions; i++) {
+          const x = area.x + 20 + (Math.random() * (area.width - 100)); // Leave margins
+          const y = area.y + 10 + (Math.random() * (area.height - 30)); // Leave margins
           
           page.drawRectangle({
             x,
             y,
-            width: 60 + (Math.random() * 20),
-            height: 12 + (Math.random() * 4),
+            width: 50 + (Math.random() * 15), // Smaller, more realistic widths
+            height: 12 + (Math.random() * 3),
             color: rgb(0, 0, 0),
             opacity: 1
           });
+          
+          emergencyRedactions++;
         }
       });
       
-      console.log(`🚨 Applied minimal emergency redaction on page ${pageIndex + 1}`);
+      console.log(`🚨 Applied ${emergencyRedactions} emergency redaction boxes on page ${pageIndex + 1}`);
     });
   }
   
@@ -1125,6 +1158,11 @@ export class PDFService {
       // Write input buffer to temporary file
       fs.writeFileSync(inputFile, pdfBuffer);
 
+      // Verify this is a valid PDF
+      if (!pdfBuffer.slice(0, 4).toString().startsWith('%PDF')) {
+        console.warn('⚠️ Input does not appear to be a valid PDF');
+      }
+
       // Get original file size for logging
       const originalSize = pdfBuffer.length;
       console.log(`📊 Original PDF size: ${(originalSize / 1024).toFixed(2)} KB`);
@@ -1156,9 +1194,8 @@ export class PDFService {
           break;
       }
 
-      // Build Ghostscript command
-      const gsCommand = [
-        'gs',
+      // Build Ghostscript command with proper array format
+      const gsArgs = [
         '-sDEVICE=pdfwrite',
         '-dCompatibilityLevel=1.4',
         '-dPDFSETTINGS=' + gsSettings,
@@ -1177,17 +1214,28 @@ export class PDFService {
         `-dCompressPages=true`,
         `-dUseFlateCompression=true`,
         `-dOptimize=true`,
-        `-sOutputFile=${outputFile}`,
-        inputFile
-      ].join(' ');
+        `-dEmbedAllFonts=true`,
+        `-dSubsetFonts=true`,
+        `-dAutoRotatePages=/None`,
+        `-dColorImageFilter=/DCTEncode`,
+        `-dGrayImageFilter=/DCTEncode`,
+        `-dJPEGQ=${Math.round(imageQuality)}`,
+        `-sOutputFile="${outputFile}"`,
+        `"${inputFile}"`
+      ];
 
       console.log(`🔧 Running Ghostscript compression: ${compressionLevel} (DPI: ${dpi})`);
+      console.log(`📋 Ghostscript command: gs ${gsArgs.join(' ')}`);
       
-      // Execute Ghostscript command
-      const { stdout, stderr } = await execAsync(gsCommand);
+      // Execute Ghostscript command with proper argument handling
+      const { stdout, stderr } = await execAsync(`gs ${gsArgs.join(' ')}`);
       
-      if (stderr && !stderr.includes('GPL Ghostscript')) {
+      if (stderr && !stderr.includes('GPL Ghostscript') && !stderr.includes('Copyright')) {
         console.warn(`⚠️ Ghostscript warning: ${stderr}`);
+      }
+
+      if (stdout) {
+        console.log(`📋 Ghostscript output: ${stdout}`);
       }
 
       // Check if output file was created
@@ -1203,6 +1251,58 @@ export class PDFService {
       console.log(`📊 Compressed PDF size: ${(compressedSize / 1024).toFixed(2)} KB`);
       console.log(`📉 Size reduction: ${reduction.toFixed(1)}%`);
 
+      // If no significant reduction was achieved, try alternative compression
+      if (reduction < 5 && compressionLevel !== 'maximum') {
+        console.log(`🔄 Low compression achieved (${reduction.toFixed(1)}%), trying maximum compression...`);
+        // Cleanup current output
+        fs.unlinkSync(outputFile);
+        
+        // Try with maximum compression settings
+        const aggressiveArgs = [
+          '-sDEVICE=pdfwrite',
+          '-dCompatibilityLevel=1.4',
+          '-dPDFSETTINGS=/screen',
+          '-dNOPAUSE',
+          '-dQUIET',
+          '-dBATCH',
+          '-dDownsampleColorImages=true',
+          '-dColorImageResolution=72',
+          '-dDownsampleGrayImages=true', 
+          '-dGrayImageResolution=72',
+          '-dDownsampleMonoImages=true',
+          '-dMonoImageResolution=144',
+          '-dColorImageDownsampleThreshold=1.0',
+          '-dGrayImageDownsampleThreshold=1.0',
+          '-dMonoImageDownsampleThreshold=1.0',
+          '-dCompressPages=true',
+          '-dUseFlateCompression=true',
+          '-dOptimize=true',
+          '-dEmbedAllFonts=true',
+          '-dSubsetFonts=true',
+          '-dColorImageFilter=/DCTEncode',
+          '-dGrayImageFilter=/DCTEncode',
+          '-dJPEGQ=15',
+          '-dDetectDuplicateImages=true',
+          '-dCompressFonts=true',
+          `-sOutputFile="${outputFile}"`,
+          `"${inputFile}"`
+        ];
+        
+        await execAsync(`gs ${aggressiveArgs.join(' ')}`);
+        
+        if (fs.existsSync(outputFile)) {
+          const aggressiveBuffer = fs.readFileSync(outputFile);
+          const aggressiveSize = aggressiveBuffer.length;
+          const aggressiveReduction = ((originalSize - aggressiveSize) / originalSize) * 100;
+          console.log(`📊 Aggressive compressed size: ${(aggressiveSize / 1024).toFixed(2)} KB (${aggressiveReduction.toFixed(1)}% reduction)`);
+          
+          // Use the better result
+          if (aggressiveReduction > reduction) {
+            return aggressiveBuffer;
+          }
+        }
+      }
+
       // If custom target size is specified and we didn't meet it, try again with higher compression
       if (compressionLevel === 'custom' && targetFileSize) {
         const targetBytes = targetFileSize * 1024;
@@ -1212,12 +1312,36 @@ export class PDFService {
           fs.unlinkSync(outputFile);
           
           // Try again with maximum compression
-          const maxCompressionCommand = gsCommand
-            .replace('-dPDFSETTINGS=/ebook', '-dPDFSETTINGS=/screen')
-            .replace(`-dColorImageResolution=${dpi}`, '-dColorImageResolution=72')
-            .replace(`-dGrayImageResolution=${dpi}`, '-dGrayImageResolution=72');
+          const maxCompressionArgs = [
+            '-sDEVICE=pdfwrite',
+            '-dCompatibilityLevel=1.4',
+            '-dPDFSETTINGS=/screen',
+            '-dNOPAUSE',
+            '-dQUIET',
+            '-dBATCH',
+            `-dDownsampleColorImages=true`,
+            `-dColorImageResolution=72`,
+            `-dDownsampleGrayImages=true`,
+            `-dGrayImageResolution=72`,
+            `-dDownsampleMonoImages=true`,
+            `-dMonoImageResolution=144`,
+            `-dColorImageDownsampleThreshold=1.0`,
+            `-dGrayImageDownsampleThreshold=1.0`,
+            `-dMonoImageDownsampleThreshold=1.0`,
+            `-dCompressPages=true`,
+            `-dUseFlateCompression=true`,
+            `-dOptimize=true`,
+            `-dEmbedAllFonts=true`,
+            `-dSubsetFonts=true`,
+            `-dAutoRotatePages=/None`,
+            `-dColorImageFilter=/DCTEncode`,
+            `-dGrayImageFilter=/DCTEncode`,
+            `-dJPEGQ=20`, // Very low quality for maximum compression
+            `-sOutputFile="${outputFile}"`,
+            `"${inputFile}"`
+          ];
           
-          await execAsync(maxCompressionCommand);
+          await execAsync(`gs ${maxCompressionArgs.join(' ')}`);
           
           if (fs.existsSync(outputFile)) {
             const finalBuffer = fs.readFileSync(outputFile);
@@ -1233,6 +1357,15 @@ export class PDFService {
 
     } catch (error) {
       console.error('🚫 Ghostscript compression failed:', error);
+      console.error('📝 Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        compressionLevel,
+        targetFileSize,
+        imageQuality,
+        originalSize: pdfBuffer.length,
+        inputFileExists: fs.existsSync(inputFile),
+        outputFileExists: fs.existsSync(outputFile)
+      });
       // Return original buffer if compression fails
       return pdfBuffer;
     } finally {
@@ -1247,6 +1380,89 @@ export class PDFService {
   }
 
   // New transformation methods
+
+  /**
+   * Applies password protection to a PDF using qpdf. Handles all cases:
+   * - Only user password
+   * - Only owner password
+   * - Both passwords
+   * Ensures the output file is always encrypted if any password is set.
+   */
+  private static async passwordProtectWithQPDF(pdfDoc: PDFDocument, userPassword?: string, ownerPassword?: string, permissions?: string[]): Promise<void> {
+    const tempDir = path.join(__dirname, '../../temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    // Save the current PDF to a temp file
+    const inputFile = path.join(tempDir, `qpdf_input_${Date.now()}.pdf`);
+    const outputFile = path.join(tempDir, `qpdf_output_${Date.now()}.pdf`);
+    fs.writeFileSync(inputFile, await pdfDoc.save());
+
+    // If neither password is set, skip
+    if (!userPassword && !ownerPassword) {
+      try { fs.unlinkSync(inputFile); } catch {}
+      return;
+    }
+
+    // qpdf requires at least one password to be set
+    // If only owner password is set, user password must be a non-empty string (qpdf will not encrypt if user password is empty)
+    // If only user password is set, owner password can be empty, but --allow-insecure is needed for 256-bit
+    let userPwd = userPassword || '';
+    let ownerPwd = ownerPassword || '';
+    if (!userPwd && ownerPwd) {
+      // Only owner password provided, set a default user password (e.g., 'user')
+      userPwd = 'user';
+    }
+
+    // Permissions (optional, not enforced if not provided)
+    let permArgs: string[] = [];
+    if (permissions && Array.isArray(permissions)) {
+      permissions.forEach(perm => {
+        permArgs.push('--' + perm);
+      });
+    }
+
+    // Build qpdf command
+    const qpdfArgs = [
+      'qpdf',
+      '--encrypt',
+      userPwd,
+      ownerPwd,
+      '256'
+    ];
+    // If only user password is set and owner password is empty, add --allow-insecure after 256
+    if (userPwd && !ownerPwd) {
+      qpdfArgs.push('--allow-insecure');
+    }
+    qpdfArgs.push('--');
+    if (permArgs.length > 0) {
+      qpdfArgs.push(...permArgs);
+    }
+    qpdfArgs.push(inputFile, outputFile);
+
+    // Properly quote passwords for shell safety
+    const qpdfCmd = qpdfArgs.map(arg => (typeof arg === 'string' && /[\s'"$]/.test(arg) ? `'${arg.replace(/'/g, "'\\''")}'` : arg)).join(' ');
+    console.log('🔒 Running qpdf for password protection:', qpdfCmd);
+
+    try {
+      const { stdout, stderr } = await execAsync(qpdfCmd);
+      if (stderr) {
+        console.warn('qpdf stderr:', stderr);
+      }
+      if (!fs.existsSync(outputFile)) {
+        throw new Error('qpdf failed: output file not created');
+      }
+      // Attach the output file to the pdfDoc for transformPDF to pick up
+      (pdfDoc as any).__qpdfProtectedFile = outputFile;
+    } catch (err) {
+      console.error('qpdf error:', err);
+      throw new Error('Failed to apply password protection with qpdf');
+    } finally {
+      // Always clean up input file
+      try { fs.unlinkSync(inputFile); } catch {}
+    }
+  }
 
   private static async mergePDFs(targetDoc: PDFDocument, mergeFileIds: string[]): Promise<void> {
     console.log(`🔗 Merge operation requested for ${mergeFileIds.length} files`);
@@ -1969,6 +2185,7 @@ export class PDFService {
     
     // Placeholder implementation - actual encryption would require external tools
   }
+
 
   private static async handlePasswordRemoval(filePath: string, rule: TransformationRule): Promise<string> {
     if (!rule.currentPassword || (!rule.removeUserPassword && !rule.removeOwnerPassword)) {

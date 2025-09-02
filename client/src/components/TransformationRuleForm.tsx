@@ -36,7 +36,7 @@ const transformationTypes = [
   { value: 'add_border', label: 'Add Borders', icon: Square, description: 'Add decorative borders around pages', category: 'Content & Annotations' },
   
   // Security & Privacy
-  { value: 'redact_text', label: 'Redact Text', icon: Eye, description: 'Hide sensitive information', category: 'Security & Privacy' },
+  // { value: 'redact_text', label: 'Redact Text', icon: Eye, description: 'Hide sensitive information', category: 'Security & Privacy' },
   { value: 'password_protect', label: 'Password Protection', icon: Lock, description: 'Add password encryption and permissions', category: 'Security & Privacy' },
   { value: 'remove_password', label: 'Remove Password', icon: KeyRound, description: 'Remove existing password protection from PDF', category: 'Security & Privacy' },
 ] as const;
@@ -101,8 +101,8 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const getCompressionEstimate = (originalSize: number, level: string): { size: number; reduction: number } => {
-    const reductionRates = {
+  const getCompressionEstimate = (originalSize: number, level: string, imageQuality?: number): { size: number; reduction: number } => {
+    const baseReductionRates = {
       low: 0.10,      // 10% reduction (minimal compression, best quality)
       medium: 0.45,   // 45% reduction (balanced)
       high: 0.70,     // 70% reduction (significant compression)
@@ -110,12 +110,22 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
       custom: 0.50    // Default 50% for custom
     };
     
-    const reduction = reductionRates[level as keyof typeof reductionRates] || 0.40;
-    const estimatedSize = originalSize * (1 - reduction);
+    let baseReduction = baseReductionRates[level as keyof typeof baseReductionRates] || 0.40;
+    
+    // Factor in image quality - lower quality = more compression
+    if (imageQuality !== undefined) {
+      // Image quality ranges from 10-100, where 100 is best quality (less compression)
+      // and 10 is worst quality (more compression)
+      const qualityFactor = (100 - imageQuality) / 100; // 0 to 0.9
+      const additionalReduction = qualityFactor * 0.3; // Up to 30% additional reduction
+      baseReduction = Math.min(0.95, baseReduction + additionalReduction); // Cap at 95% reduction
+    }
+    
+    const estimatedSize = originalSize * (1 - baseReduction);
     
     return {
       size: estimatedSize,
-      reduction: reduction * 100
+      reduction: baseReduction * 100
     };
   };
 
@@ -187,106 +197,6 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
       console.error('Image upload error:', error);
       alert(`Failed to upload ${file.name}`);
     }
-
-    // Reset image input
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
-    }
-  };
-
-  const triggerImageUpload = (ruleId: string) => {
-    setSelectedRuleId(ruleId);
-    if (imageInputRef.current) {
-      imageInputRef.current.click();
-    }
-  };
-
-  const handleTransformationTypeChange = (ruleId: string, newType: TransformationRule['type']) => {
-    updateRule(ruleId, { type: newType });
-    setShowTransformationModal(false);
-    setSelectedRuleId(null);
-  };
-
-  const openTransformationModal = (ruleId: string) => {
-    setSelectedRuleId(ruleId);
-    setShowTransformationModal(true);
-  };
-
-  const closeTransformationModal = () => {
-    setShowTransformationModal(false);
-    setSelectedRuleId(null);
-  };
-
-  // Transformation Type Selection Modal
-  const TransformationTypeModal = () => {
-    if (!showTransformationModal || !selectedRuleId) return null;
-
-    const currentRule = rules.find(r => r.id === selectedRuleId);
-    if (!currentRule) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-semibold text-gray-900">Choose Transformation Type</h3>
-              <button
-                onClick={closeTransformationModal}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <Plus className="h-5 w-5 rotate-45 text-gray-500" />
-              </button>
-            </div>
-          </div>
-          
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-            <div className="space-y-8">
-              {['Page Operations', 'Document Management', 'Content & Annotations', 'Security & Privacy'].map((category) => {
-                const categoryTypes = transformationTypes.filter(type => type.category === category);
-                
-                return (
-                  <div key={category} className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <div className="h-px bg-gradient-to-r from-primary-200 to-transparent flex-1" />
-                      <h4 className="font-semibold text-gray-900 px-3">{category}</h4>
-                      <div className="h-px bg-gradient-to-l from-primary-200 to-transparent flex-1" />
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {categoryTypes.map((type) => {
-                        const IconComponent = type.icon;
-                        
-                        return (
-                          <button
-                            key={type.value}
-                            onClick={() => addRuleWithType(type.value)}
-                            className="group p-4 bg-white border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-primary-50 transition-all duration-200 text-left focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-                          >
-                            <div className="flex items-start space-x-3">
-                              <div className="p-2 bg-gray-100 group-hover:bg-primary-100 rounded-lg transition-colors duration-200">
-                                <IconComponent className="h-5 w-5 text-gray-600 group-hover:text-primary-600" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-medium text-gray-900 group-hover:text-primary-900 text-sm mb-1">
-                                  {type.label}
-                                </h4>
-                                <p className="text-xs text-gray-500 group-hover:text-primary-700 leading-relaxed">
-                                  {type.description}
-                                </p>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   const renderRuleFields = (rule: TransformationRule) => {
@@ -488,63 +398,8 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
           </div>
         );
 
-      case 'redact_text':
-        return (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Words/phrases to redact
-              </label>
-              <input
-                type="text"
-                placeholder="confidential, secret, private, John Doe"
-                className="input-field"
-                value={rule.redactWords?.join(', ') || ''}
-                onChange={(e) => {
-                  const words = e.target.value.split(',').map(w => w.trim()).filter(w => w);
-                  updateRule(rule.id, { redactWords: words });
-                }}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Separate multiple words or phrases with commas. Text search is case-insensitive.
-              </p>
-            </div>
-            
-            {rule.redactWords && rule.redactWords.length > 0 && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                <h4 className="text-sm font-medium text-yellow-800 mb-2">
-                  🔒 Text to be redacted:
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  {rule.redactWords.map((word, index) => (
-                    <span 
-                      key={index}
-                      className="inline-block bg-black text-white px-2 py-1 rounded text-xs"
-                      title={`This text will be blacked out: "${word}"`}
-                    >
-                      ███████
-                    </span>
-                  ))}
-                </div>
-                <p className="text-xs text-yellow-700 mt-2">
-                  Preview: Black bars will cover these words/phrases in your PDF
-                </p>
-              </div>
-            )}
-            
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <h4 className="text-sm font-medium text-blue-800 mb-2">
-                ℹ️ How redaction works:
-              </h4>
-              <ul className="text-xs text-blue-700 space-y-1">
-                <li>• Text is analyzed and matched (case-insensitive)</li>
-                <li>• Black rectangles cover found text instances</li>
-                <li>• Works with partial matches within words</li>
-                <li>• Applied to all pages in the document</li>
-              </ul>
-            </div>
-          </div>
-        );
+      // case 'redact_text':
+      //   return null;
 
       case 'add_page_numbers':
         return (
@@ -662,7 +517,8 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
       case 'compress': {
         const originalFileSize = uploadedFile?.size || 0;
         const compressionLevel = rule.compressionLevel || 'medium';
-        const estimate = getCompressionEstimate(originalFileSize, compressionLevel);
+        const imageQuality = rule.imageQuality || 85;
+        const estimate = getCompressionEstimate(originalFileSize, compressionLevel, imageQuality);
         
         return (
           <div className="space-y-6">
@@ -706,7 +562,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                 {uploadedFile && (
                   <div className="mt-2 space-y-1 text-xs text-gray-600">
                     {['low', 'medium', 'high', 'maximum'].map((level) => {
-                      const levelEstimate = getCompressionEstimate(originalFileSize, level);
+                      const levelEstimate = getCompressionEstimate(originalFileSize, level, imageQuality);
                       const isSelected = compressionLevel === level;
                       return (
                         <div key={level} className={`flex justify-between ${isSelected ? 'font-medium text-primary-600' : ''}`}>
@@ -1010,9 +866,12 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                   onChange={(e) => e.target.files && selectedRuleId === rule.id && handleImageUpload(rule.id, e.target.files)}
                 />
                 <button 
-                  type="button" 
+                  type="button"
                   className="btn-secondary"
-                  onClick={() => triggerImageUpload(rule.id)}
+                  onClick={() => {
+                    setSelectedRuleId(rule.id);
+                    imageInputRef.current?.click();
+                  }}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   {rule.imageFileName ? 'Change Image' : 'Select Image'}
@@ -1957,41 +1816,24 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
         );
       }
 
+
       case 'password_protect':
         return (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  User Password (Optional)
-                </label>
-                <input
-                  type="password"
-                  placeholder="Password to open PDF"
-                  className="input-field"
-                  value={rule.userPassword || ''}
-                  onChange={(e) => updateRule(rule.id, { userPassword: e.target.value })}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Required to open the PDF
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Owner Password (Optional)
-                </label>
-                <input
-                  type="password"
-                  placeholder="Password for permissions"
-                  className="input-field"
-                  value={rule.ownerPassword || ''}
-                  onChange={(e) => updateRule(rule.id, { ownerPassword: e.target.value })}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Controls what users can do with the PDF
-                </p>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                PDF Password
+              </label>
+              <input
+                type="password"
+                placeholder="Password to open and secure PDF"
+                className="input-field"
+                value={rule.userPassword || ''}
+                onChange={(e) => updateRule(rule.id, { userPassword: e.target.value, ownerPassword: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                This password will be required to open the PDF and to change permissions.
+              </p>
             </div>
 
             <div>
@@ -2054,44 +1896,11 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                 placeholder="Enter current PDF password"
                 className="input-field"
                 value={rule.currentPassword || ''}
-                onChange={(e) => updateRule(rule.id, { currentPassword: e.target.value })}
+                onChange={(e) => updateRule(rule.id, { currentPassword: e.target.value, removeUserPassword: true, removeOwnerPassword: true })}
               />
               <p className="text-xs text-gray-500 mt-1">
                 Enter the current password to verify access to the PDF
               </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Remove Password Options
-              </label>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    id={`remove-user-password-${rule.id}`}
-                    checked={rule.removeUserPassword || false}
-                    onChange={(e) => updateRule(rule.id, { removeUserPassword: e.target.checked })}
-                    className="checkbox"
-                  />
-                  <label htmlFor={`remove-user-password-${rule.id}`} className="text-sm text-gray-700">
-                    Remove User Password (Document opening password)
-                  </label>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    id={`remove-owner-password-${rule.id}`}
-                    checked={rule.removeOwnerPassword || false}
-                    onChange={(e) => updateRule(rule.id, { removeOwnerPassword: e.target.checked })}
-                    className="checkbox"
-                  />
-                  <label htmlFor={`remove-owner-password-${rule.id}`} className="text-sm text-gray-700">
-                    Remove Owner Password (Permissions password)
-                  </label>
-                </div>
-              </div>
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -2102,24 +1911,12 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                   <ul className="text-xs space-y-1">
                     <li>• <strong>User Password:</strong> Allows anyone to open the PDF without a password</li>
                     <li>• <strong>Owner Password:</strong> Removes restrictions on printing, editing, copying, etc.</li>
-                    <li>• <strong>Both Options:</strong> Can be selected to completely remove all password protection</li>
+                    <li>• <strong>Both Options:</strong> Always removes all password protection</li>
                     <li>• <strong>Security:</strong> Ensure you have authorization to remove password protection</li>
                   </ul>
                 </div>
               </div>
             </div>
-
-            {(!rule.removeUserPassword && !rule.removeOwnerPassword) && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <div className="flex items-start space-x-2">
-                  <Shield className="h-5 w-5 text-amber-600 mt-0.5" />
-                  <div className="text-sm text-amber-800">
-                    <p className="font-medium mb-1">Selection Required</p>
-                    <p>Please select at least one password type to remove (User Password or Owner Password).</p>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         );
 
@@ -2455,7 +2252,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
                       <div className="flex-1">
                         <button
                           type="button"
-                          onClick={() => openTransformationModal(rule.id)}
+                          // onClick={() => openTransformationModal(rule.id)}
                           className="w-full p-4 glass rounded-xl border border-white/30 hover:border-purple-300/50 hover:shadow-lg transition-all duration-300 text-left focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:ring-offset-2 group"
                         >
                           <div className="flex items-center justify-between">
@@ -2506,7 +2303,7 @@ export const TransformationRuleForm: React.FC<TransformationRuleFormProps> = ({
       )}
 
       {/* Transformation Type Selection Modal */}
-      <TransformationTypeModal />
+      {/* <TransformationTypeModal /> */}
     </div>
   );
 }; 

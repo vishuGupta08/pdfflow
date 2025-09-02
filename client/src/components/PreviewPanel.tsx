@@ -65,8 +65,8 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, upl
         return <Shield {...iconProps} />;
       case 'merge_pdfs':
         return <GitMerge {...iconProps} />;
-      case 'redact_text':
-        return <Eye {...iconProps} />;
+      // case 'redact_text':
+      //   return null;
       case 'add_page_numbers':
         return <Hash {...iconProps} />;
       case 'extract_pages':
@@ -110,8 +110,8 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, upl
         return `Add watermark "${rule.text || 'WATERMARK'}" at ${rule.position || 'center'} (${Math.round((rule.opacity || 0.3) * 100)}% opacity)`;
       case 'merge_pdfs':
         return `Merge ${rule.mergeFiles?.length || 0} PDF files with current document`;
-      case 'redact_text':
-        return `Redact: ${rule.redactWords?.join(', ') || 'No words specified'}`;
+      // case 'redact_text':
+      //   return '';
       case 'add_page_numbers':
         return `Add page numbers at ${rule.position || 'bottom-center'} (${rule.fontSize || 12}pt)`;
       case 'extract_pages':
@@ -214,8 +214,8 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ rules, fileName, upl
         return 'Add Watermark';
       case 'merge_pdfs':
         return 'Merge PDFs';
-      case 'redact_text':
-        return 'Redact Text';
+      // case 'redact_text':
+      //   return '';
       case 'add_page_numbers':
         return 'Add Page Numbers';
       case 'extract_pages':
