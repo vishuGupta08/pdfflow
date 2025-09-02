@@ -12,8 +12,8 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],
-          pdfLib: ['pdf-lib'],
-          lucide: ['lucide-react']
+          lucide: ['lucide-react'],
+          pdf: ['react-pdf', 'pdfjs-dist']
         }
       }
     },
