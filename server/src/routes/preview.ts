@@ -10,10 +10,13 @@ const transformedFiles = new Map<string, Buffer>();
 
 // Store transformed PDF for preview
 export const storeTransformedPDF = (fileId: string, pdfBuffer: Buffer): void => {
+  console.log('📦 Storing transformed PDF with ID:', fileId, 'Buffer size:', pdfBuffer.length);
   transformedFiles.set(fileId, pdfBuffer);
+  console.log('✅ Successfully stored. Total transformed files:', transformedFiles.size);
   
   // Auto-cleanup after 1 hour
   setTimeout(() => {
+    console.log('🗑️ Auto-cleanup removing transformed file:', fileId);
     transformedFiles.delete(fileId);
   }, 60 * 60 * 1000);
 };
@@ -22,16 +25,24 @@ export const storeTransformedPDF = (fileId: string, pdfBuffer: Buffer): void => 
 router.get('/upload/:fileId', (req: Request, res: Response) => {
   try {
     const { fileId } = req.params;
+    console.log('🔍 Preview request for fileId:', fileId);
+    console.log('🔍 Available files in uploadedFiles:', Array.from(uploadedFiles.keys()));
     
     const uploadedFile = uploadedFiles.get(fileId);
     if (!uploadedFile) {
+      console.log('❌ File not found in uploadedFiles map');
       return res.status(404).json({ error: 'File not found' });
     }
 
+    console.log('✅ Found file:', uploadedFile.path);
+
     // Check if file exists on disk
     if (!fs.existsSync(uploadedFile.path)) {
+      console.log('❌ File not found on disk:', uploadedFile.path);
       return res.status(404).json({ error: 'File not found on disk' });
     }
+
+    console.log('✅ File exists on disk, serving...');
 
     // Set headers for PDF viewing
     res.setHeader('Content-Type', 'application/pdf');
@@ -54,11 +65,16 @@ router.get('/upload/:fileId', (req: Request, res: Response) => {
 router.get('/:fileId', (req: Request, res: Response) => {
   try {
     const { fileId } = req.params;
+    console.log('🔍 Transformed preview request for fileId:', fileId);
+    console.log('🔍 Available transformed files:', Array.from(transformedFiles.keys()));
     
     const pdfBuffer = transformedFiles.get(fileId);
     if (!pdfBuffer) {
+      console.log('❌ Transformed PDF not found for fileId:', fileId);
       return res.status(404).json({ error: 'Preview not found or expired' });
     }
+    
+    console.log('✅ Found transformed PDF, sending buffer of size:', pdfBuffer.length);
 
     // Set headers for PDF viewing
     res.setHeader('Content-Type', 'application/pdf');

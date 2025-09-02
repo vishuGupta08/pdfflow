@@ -44,23 +44,45 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
     console.log('  - showOriginalState:', showOriginalState);
     console.log('  - transformations.length:', transformations.length);
     console.log('  - livePreviewUrl:', livePreviewUrl);
+    console.log('  - fileId:', fileId);
+    console.log('  - showOriginal prop:', showOriginal);
     
-    if (showOriginalState || transformations.length === 0) {
-      // Show original uploaded file
-      const originalUrl = `${API_BASE_URL}/upload/preview/${fileId}`;
-      console.log('  → Using original URL:', originalUrl);
-      return originalUrl;
-    } else if (livePreviewUrl) {
-      // Show live preview with transformations
-      console.log('  → Using live preview URL:', livePreviewUrl);
-      return livePreviewUrl;
-    } else {
-      // Show transformed preview (existing behavior)
-      const transformedUrl = `${API_BASE_URL}/preview/${fileId}`;
-      console.log('  → Using transformed URL:', transformedUrl);
-      return transformedUrl;
+    // If we have transformations defined (live preview mode)
+    if (transformations.length > 0) {
+      // If showOriginalState is true, show original
+      if (showOriginalState) {
+        const originalUrl = `${API_BASE_URL.replace('/api', '')}/api/preview/upload/${fileId}`;
+        console.log('  → Using original URL (showOriginalState=true):', originalUrl);
+        return originalUrl;
+      } 
+      // If we have live preview URL (generated from transformations), use it
+      else if (livePreviewUrl) {
+        console.log('  → Using live preview URL:', livePreviewUrl);
+        return livePreviewUrl;
+      } 
+      // If we have transformations but no live preview yet, show original while generating
+      else {
+        const originalUrl = `${API_BASE_URL.replace('/api', '')}/api/preview/upload/${fileId}`;
+        console.log('  → Using original URL (transformations pending):', originalUrl);
+        return originalUrl;
+      }
+    } 
+    // No transformations passed - distinguish between original file and transformed result
+    else {
+      // If showOriginal prop is true, this is definitely an original file preview
+      if (showOriginal) {
+        const originalUrl = `${API_BASE_URL.replace('/api', '')}/api/preview/upload/${fileId}`;
+        console.log('  → Using original URL (showOriginal prop=true):', originalUrl);
+        return originalUrl;
+      }
+      // Otherwise, this is a transformed result preview (fileId is actually a previewId)
+      else {
+        const transformedUrl = `${API_BASE_URL}/preview/${fileId}`;
+        console.log('  → Using transformed URL (transformed result):', transformedUrl);
+        return transformedUrl;
+      }
     }
-  }, [fileId, showOriginalState, transformations.length, livePreviewUrl]);
+  }, [fileId, showOriginalState, transformations.length, livePreviewUrl, showOriginal]);
 
   // Generate live preview when transformations change
   useEffect(() => {
@@ -72,6 +94,13 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
 
     if (!showOriginal && transformations.length > 0) {
       console.log('🚀 Generating live preview...');
+      
+      // Clean up previous preview URL if it exists
+      if (livePreviewUrl) {
+        URL.revokeObjectURL(livePreviewUrl);
+        setLivePreviewUrl(null);
+      }
+      
       setIsGeneratingPreview(true);
       generateLivePreview(fileId, transformations)
         .then((url) => {
@@ -98,12 +127,8 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
         .finally(() => {
           setIsGeneratingPreview(false);
         });
-      if (livePreviewUrl) {
-        URL.revokeObjectURL(livePreviewUrl);
-        setLivePreviewUrl(null);
-      }
     }
-  }, [fileId, transformations, showOriginalState, livePreviewUrl]);
+  }, [fileId, transformations, showOriginalState]);
 
   // Clean up blob URL on unmount
   useEffect(() => {
@@ -119,6 +144,8 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     console.log('PDF loaded successfully, pages:', numPages);
     setNumPages(numPages);
+    // Only reset page if current page is out of range
+    setPageNumber(prev => prev > numPages ? 1 : prev);
     setError(null);
   }, []);
 

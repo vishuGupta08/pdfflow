@@ -291,7 +291,9 @@ router.post('/', async (req: Request, res: Response) => {
       
       // Generate preview ID and store transformed PDF
       const previewId = uuidv4();
+      console.log('🎯 Generated previewId for transformed PDF:', previewId);
       storeTransformedPDF(previewId, transformedPDF);
+      console.log('💾 Stored transformed PDF with preview ID:', previewId);
       
       // Store transformed PDF for download using shared storage
       const downloadId = uuidv4();

@@ -72,9 +72,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       }, controller.signal);
       
       if (response.success && response.data) {
+        console.log('🔍 FileUpload - Upload successful, received data:', response.data);
         // Show completed progress briefly before transitioning
         setUploadProgress(prev => ({ ...prev, progress: 100 }));
         setTimeout(() => {
+          console.log('🔍 FileUpload - Calling onFileUpload with:', response.data);
           onFileUpload(response.data!);
         }, 500);
       } else {

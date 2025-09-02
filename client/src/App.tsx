@@ -79,9 +79,10 @@ function App() {
   }
 
   const handleFileUpload = (file: UploadedFile) => {
-    setUploadedFile(file)
-    setCurrentStep('configure')
-  }
+    console.log('🔍 App - handleFileUpload called with:', file);
+    setUploadedFile(file);
+    setCurrentStep('configure'); // Move to configure step after file upload
+  };
 
   const handleFileRemove = () => {
     setUploadedFile(null)

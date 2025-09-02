@@ -46,12 +46,15 @@ export class PDFService {
       if (transformation.type !== 'compress' && 
           transformation.type !== 'remove_password' && 
           transformation.type !== 'convert_to_word') {
+        console.log(`🔧 Applying transformation: ${transformation.type}`, transformation);
         await this.applyTransformation(pdfDoc, transformation);
       }
     }
     
     // Save the PDF with standard options
+    console.log('💾 Saving transformed PDF...');
     let transformedPdfBuffer = Buffer.from(await pdfDoc.save());
+    console.log(`✅ Transformed PDF saved! Size: ${Math.round(transformedPdfBuffer.length / 1024)}KB`);
 
     // If password protection was applied, use the qpdf output file
     if ((pdfDoc as any).__qpdfProtectedFile) {
@@ -199,6 +202,7 @@ export class PDFService {
         await this.removePages(pdfDoc, rule.pages || []);
         break;
       case 'rotate_pages':
+        console.log(`🔄 Applying rotate_pages transformation:`, rule);
         await this.rotatePages(pdfDoc, rule.pages || [], rule.angle || 90);
         break;
       case 'add_watermark':
@@ -731,6 +735,7 @@ export class PDFService {
   }
   
   private static async rotatePages(pdfDoc: PDFDocument, pages: number[], angle: number): Promise<void> {
+    console.log(`🔄 Rotating pages: ${pages.join(', ')} by ${angle} degrees`);
     const pageCount = pdfDoc.getPageCount();
     
     // Validate rotation angle - pdf-lib only supports 90-degree increments
@@ -743,9 +748,22 @@ export class PDFService {
       const zeroBasedIndex = pageIndex - 1;
       if (zeroBasedIndex >= 0 && zeroBasedIndex < pageCount) {
         const page = pdfDoc.getPage(zeroBasedIndex);
-        page.setRotation(degrees(angle));
+        console.log(`📄 Rotating page ${pageIndex} (0-based: ${zeroBasedIndex}) by ${angle}°`);
+        
+        // Get current rotation and add the new rotation
+        const currentRotation = page.getRotation();
+        const newRotation = (currentRotation.angle + angle) % 360;
+        console.log(`📐 Current rotation: ${currentRotation.angle}°, New rotation: ${newRotation}°`);
+        
+        // Set the rotation using degrees
+        page.setRotation(degrees(newRotation));
+        
+        console.log(`✅ Page ${pageIndex} rotated successfully to ${newRotation}°`);
+      } else {
+        console.warn(`⚠️ Page ${pageIndex} is out of range (document has ${pageCount} pages)`);
       }
     }
+    console.log(`🎉 Rotation complete for ${pages.length} pages`);
   }
   
   private static async addWatermark(pdfDoc: PDFDocument, text: string, position: string, opacity: number): Promise<void> {

@@ -49,6 +49,7 @@ router.post('/', (req, res, next) => {
     };
 
     uploadedFiles.set(fileId, uploadedFile);
+    console.log('✅ File uploaded and stored:', fileId, 'Total files:', uploadedFiles.size);
 
     res.json({
       success: true,

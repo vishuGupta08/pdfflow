@@ -42,7 +42,7 @@ export const PDFThumbnail: React.FC<PDFThumbnailProps> = ({
 
   // For uploaded files, we need to construct the correct preview URL
   // The server has an upload endpoint that serves uploaded files for preview
-  const pdfUrl = `${API_BASE_URL}/upload/preview/${fileId}`;
+  const pdfUrl = `${API_BASE_URL.replace('/api', '')}/api/preview/upload/${fileId}`;
 
   const onDocumentLoadSuccess = useCallback(() => {
     setLoading(false);
