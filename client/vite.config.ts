@@ -23,14 +23,8 @@ export default defineConfig({
     cssCodeSplit: true,
     sourcemap: false, // Disable source maps in production
     
-    // Compression
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true, // Remove console.logs in production
-        drop_debugger: true
-      }
-    }
+    // Compression - using esbuild (built-in, faster than terser)
+    minify: 'esbuild'
   },
   
   // Server configuration for development
